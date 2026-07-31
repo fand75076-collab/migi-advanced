@@ -1,0 +1,10 @@
+Migi Advanced v0.10 uses an 8 x 21 full-character atlas. Rows 13-20 restore
+Migi's right-hand symbiont topology with normal-hand, palm-observer,
+signal-sampling, calm-diagnosis, storage-pocket, recovery-care,
+detached-scout-return, complete-sleep, and protective-shield families. The
+legacy three-legged rows remain available only for short detached scouting and
+anime-modernized device interactions. Every family uses authored full poses,
+per-frame timing, eye anchors, tissue zones and rigid prop zones.
+
+migi-parts.png remains packaged only as a recovery asset; the active renderer
+never assembles Migi from detachable template parts.

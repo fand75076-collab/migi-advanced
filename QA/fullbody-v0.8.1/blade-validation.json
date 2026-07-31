@@ -1,0 +1,259 @@
+{
+  "ok": true,
+  "atlas_size": [
+    3584,
+    4032
+  ],
+  "cell_size": 448,
+  "clip": {
+    "row": 4,
+    "column_offset": 4,
+    "frame_count": 4,
+    "frame_duration": 0.22
+  },
+  "frames": [
+    {
+      "index": 0,
+      "alpha_bbox": [
+        23,
+        139,
+        424,
+        436
+      ],
+      "muscle_red_pixels_right_side": 239,
+      "muscle_red_bbox_right_side": [
+        253,
+        146,
+        416,
+        412
+      ],
+      "muscle_red_pixels_approx_desktop": 10,
+      "muscle_red_bbox_approx_desktop": [
+        62,
+        67,
+        99,
+        102
+      ]
+    },
+    {
+      "index": 1,
+      "alpha_bbox": [
+        21,
+        139,
+        427,
+        436
+      ],
+      "muscle_red_pixels_right_side": 675,
+      "muscle_red_bbox_right_side": [
+        253,
+        147,
+        422,
+        412
+      ],
+      "muscle_red_pixels_approx_desktop": 52,
+      "muscle_red_bbox_approx_desktop": [
+        71,
+        68,
+        91,
+        77
+      ]
+    },
+    {
+      "index": 2,
+      "alpha_bbox": [
+        12,
+        139,
+        436,
+        436
+      ],
+      "muscle_red_pixels_right_side": 2351,
+      "muscle_red_bbox_right_side": [
+        252,
+        191,
+        376,
+        412
+      ],
+      "muscle_red_pixels_approx_desktop": 173,
+      "muscle_red_bbox_approx_desktop": [
+        62,
+        67,
+        86,
+        102
+      ]
+    },
+    {
+      "index": 3,
+      "alpha_bbox": [
+        35,
+        140,
+        413,
+        436
+      ],
+      "muscle_red_pixels_right_side": 430,
+      "muscle_red_bbox_right_side": [
+        251,
+        147,
+        412,
+        412
+      ],
+      "muscle_red_pixels_approx_desktop": 31,
+      "muscle_red_bbox_approx_desktop": [
+        62,
+        47,
+        97,
+        102
+      ]
+    }
+  ],
+  "red_muscle_readable_at_approx_desktop_size": true,
+  "changed_cells_vs_v0_8_0": [
+    [
+      4,
+      4
+    ],
+    [
+      4,
+      5
+    ],
+    [
+      4,
+      6
+    ],
+    [
+      4,
+      7
+    ]
+  ],
+  "expected_changed_cells": [
+    [
+      4,
+      4
+    ],
+    [
+      4,
+      5
+    ],
+    [
+      4,
+      6
+    ],
+    [
+      4,
+      7
+    ]
+  ],
+  "unchanged_clip_metadata_preserved": true,
+  "metal_frames": [
+    {
+      "index": 0,
+      "size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        16,
+        93,
+        214,
+        240
+      ],
+      "muscle_red_pixels_right_side": 1371,
+      "muscle_red_bbox_right_side": [
+        129,
+        107,
+        212,
+        239
+      ],
+      "muscle_red_pixels_approx_desktop": 226,
+      "muscle_red_bbox_approx_desktop": [
+        62,
+        45,
+        101,
+        97
+      ]
+    },
+    {
+      "index": 1,
+      "size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        15,
+        93,
+        215,
+        240
+      ],
+      "muscle_red_pixels_right_side": 1647,
+      "muscle_red_bbox_right_side": [
+        129,
+        105,
+        213,
+        239
+      ],
+      "muscle_red_pixels_approx_desktop": 305,
+      "muscle_red_bbox_approx_desktop": [
+        62,
+        43,
+        101,
+        98
+      ]
+    },
+    {
+      "index": 2,
+      "size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        10,
+        93,
+        220,
+        240
+      ],
+      "muscle_red_pixels_right_side": 1633,
+      "muscle_red_bbox_right_side": [
+        129,
+        103,
+        218,
+        239
+      ],
+      "muscle_red_pixels_approx_desktop": 293,
+      "muscle_red_bbox_approx_desktop": [
+        62,
+        42,
+        103,
+        98
+      ]
+    },
+    {
+      "index": 3,
+      "size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        22,
+        93,
+        208,
+        240
+      ],
+      "muscle_red_pixels_right_side": 1064,
+      "muscle_red_bbox_right_side": [
+        129,
+        114,
+        207,
+        239
+      ],
+      "muscle_red_pixels_approx_desktop": 183,
+      "muscle_red_bbox_approx_desktop": [
+        62,
+        53,
+        98,
+        97
+      ]
+    }
+  ],
+  "atlas_sha256": "284a0755716e6b9cdb1644e61c560cd8f735746288b712765d4d0b2c93f6c56f",
+  "manifest_sha256": "5cb9ec596e84a6685e98c66393408e57d3992ef9f8fb9d80a8b9efe81af404a5",
+  "source_sha256": "5cdafd9c7f7604fdae3df67a6316561caa6163948f7e58330287cab1e3873c89"
+}

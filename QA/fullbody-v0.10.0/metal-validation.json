@@ -1,0 +1,178 @@
+{
+  "ok": true,
+  "logical_display_size": [
+    115,
+    135
+  ],
+  "retina_capture_size": [
+    230,
+    270
+  ],
+  "errors": [],
+  "resource_hashes": {
+    "migi-v4-atlas.png": {
+      "source": "630080752431281387159863d532c649d13a3cee430fd61660805bf30bda3f8e",
+      "installed": "630080752431281387159863d532c649d13a3cee430fd61660805bf30bda3f8e"
+    },
+    "migi-v4-atlas.json": {
+      "source": "3a68d95628c8f54e75f15211419e8e55050177d0df851cde6871bf354e78a4c0",
+      "installed": "3a68d95628c8f54e75f15211419e8e55050177d0df851cde6871bf354e78a4c0"
+    }
+  },
+  "frames": {
+    "normal-hand": {
+      "path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal/normal-hand.png",
+      "pixel_size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        59,
+        87,
+        171,
+        240
+      ],
+      "visible_size": [
+        112,
+        153
+      ]
+    },
+    "palm-observer": {
+      "path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal/palm-observer.png",
+      "pixel_size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        77,
+        86,
+        152,
+        240
+      ],
+      "visible_size": [
+        75,
+        154
+      ]
+    },
+    "signal-sampling": {
+      "path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal/signal-sampling.png",
+      "pixel_size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        71,
+        86,
+        160,
+        240
+      ],
+      "visible_size": [
+        89,
+        154
+      ]
+    },
+    "calm-diagnosis": {
+      "path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal/calm-diagnosis.png",
+      "pixel_size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        66,
+        87,
+        163,
+        240
+      ],
+      "visible_size": [
+        97,
+        153
+      ]
+    },
+    "storage-pocket": {
+      "path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal/storage-pocket.png",
+      "pixel_size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        61,
+        86,
+        169,
+        240
+      ],
+      "visible_size": [
+        108,
+        154
+      ]
+    },
+    "recovery-care": {
+      "path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal/recovery-care.png",
+      "pixel_size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        73,
+        95,
+        157,
+        240
+      ],
+      "visible_size": [
+        84,
+        145
+      ]
+    },
+    "detached-scout-return": {
+      "path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal/detached-scout-return.png",
+      "pixel_size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        57,
+        192,
+        172,
+        240
+      ],
+      "visible_size": [
+        115,
+        48
+      ]
+    },
+    "complete-sleep": {
+      "path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal/complete-sleep.png",
+      "pixel_size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        77,
+        125,
+        153,
+        240
+      ],
+      "visible_size": [
+        76,
+        115
+      ]
+    },
+    "protective-shield": {
+      "path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal/protective-shield.png",
+      "pixel_size": [
+        230,
+        270
+      ],
+      "alpha_bbox": [
+        67,
+        102,
+        163,
+        240
+      ],
+      "visible_size": [
+        96,
+        138
+      ]
+    }
+  },
+  "contact_sheet": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/metal-contact.png"
+}

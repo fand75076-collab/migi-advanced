@@ -1,0 +1,3150 @@
+{
+  "version": 4,
+  "columns": 8,
+  "rows": 21,
+  "cell_width": 448,
+  "cell_height": 448,
+  "clips": {
+    "idle": {
+      "row": 0,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.18,
+      "frame_durations": [
+        0.42,
+        0.25,
+        0.28,
+        0.35,
+        0.32,
+        0.65
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5491071428571429,
+            "y": 0.3705357142857143,
+            "radius": 0.03571428571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.2689732142857143,
+            "y": 0.48549107142857145,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5591517857142857,
+            "y": 0.3705357142857143,
+            "radius": 0.03571428571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.28236607142857145,
+            "y": 0.48325892857142855,
+            "radius": 0.027901785714285716,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5837053571428571,
+            "y": 0.3705357142857143,
+            "radius": 0.03571428571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.30357142857142855,
+            "y": 0.484375,
+            "radius": 0.029017857142857144,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5602678571428571,
+            "y": 0.3705357142857143,
+            "radius": 0.03571428571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.29129464285714285,
+            "y": 0.48549107142857145,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5669642857142857,
+            "y": 0.3716517857142857,
+            "radius": 0.036830357142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.30691964285714285,
+            "y": 0.48325892857142855,
+            "radius": 0.027901785714285716,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5658482142857143,
+            "y": 0.3705357142857143,
+            "radius": 0.03571428571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.2779017857142857,
+            "y": 0.484375,
+            "radius": 0.029017857142857144,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "left_clip": "idle-left",
+      "turn_left_clip": "turn-left",
+      "turn_right_clip": "turn-right"
+    },
+    "patrol": {
+      "row": 1,
+      "column_offset": 0,
+      "frame_count": 8,
+      "frame_duration": 0.12,
+      "frame_durations": [
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.22
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5792410714285714,
+            "y": 0.3794642857142857,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.22544642857142858,
+            "y": 0.5401785714285714,
+            "radius": 0.033482142857142856,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6439732142857143,
+            "y": 0.4375,
+            "radius": 0.04352678571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.36495535714285715,
+            "y": 0.5513392857142857,
+            "radius": 0.033482142857142856,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.7299107142857143,
+            "y": 0.4609375,
+            "radius": 0.044642857142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.5825892857142857,
+            "y": 0.4341517857142857,
+            "radius": 0.04352678571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.20870535714285715,
+            "y": 0.5691964285714286,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6060267857142857,
+            "y": 0.45200892857142855,
+            "radius": 0.04352678571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.6082589285714286,
+            "y": 0.4799107142857143,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.2857142857142857,
+            "y": 0.5535714285714286,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6662946428571429,
+            "y": 0.4453125,
+            "radius": 0.04352678571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.6205357142857143,
+            "y": 0.4095982142857143,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.2767857142857143,
+            "y": 0.5457589285714286,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "left_clip": "patrol-left",
+      "turn_left_clip": "turn-left",
+      "turn_right_clip": "turn-right"
+    },
+    "patrol-left": {
+      "row": 2,
+      "column_offset": 0,
+      "frame_count": 8,
+      "frame_duration": 0.12,
+      "frame_durations": [
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.12,
+        0.22
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.3158482142857143,
+            "y": 0.37388392857142855,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6495535714285714,
+            "y": 0.5122767857142857,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.265625,
+            "y": 0.4966517857142857,
+            "radius": 0.04352678571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.5892857142857143,
+            "y": 0.6584821428571429,
+            "radius": 0.033482142857142856,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.3314732142857143,
+            "y": 0.40736607142857145,
+            "radius": 0.04352678571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6986607142857143,
+            "y": 0.5089285714285714,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.26004464285714285,
+            "y": 0.5,
+            "radius": 0.04352678571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.35714285714285715,
+            "y": 0.45200892857142855,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6819196428571429,
+            "y": 0.5959821428571429,
+            "radius": 0.029017857142857144,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.29017857142857145,
+            "y": 0.5022321428571429,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.5993303571428571,
+            "y": 0.6473214285714286,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.2622767857142857,
+            "y": 0.48549107142857145,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.5803571428571429,
+            "y": 0.6037946428571429,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.31473214285714285,
+            "y": 0.43191964285714285,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6462053571428571,
+            "y": 0.5345982142857143,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ]
+    },
+    "turn-left": {
+      "row": 3,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.15,
+      "frame_durations": [
+        0.13,
+        0.15,
+        0.17,
+        0.17,
+        0.15,
+        0.24
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5602678571428571,
+            "y": 0.3950892857142857,
+            "radius": 0.044642857142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.24776785714285715,
+            "y": 0.5703125,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5848214285714286,
+            "y": 0.39285714285714285,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.3169642857142857,
+            "y": 0.5736607142857143,
+            "radius": 0.029017857142857144,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6004464285714286,
+            "y": 0.38058035714285715,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6484375,
+            "y": 0.5658482142857143,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.4140625,
+            "y": 0.41517857142857145,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.41183035714285715,
+            "y": 0.6160714285714286,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.40066964285714285,
+            "y": 0.421875,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.36495535714285715,
+            "y": 0.3783482142857143,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6941964285714286,
+            "y": 0.5669642857142857,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ]
+    },
+    "turn-right": {
+      "row": 4,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.15,
+      "frame_durations": [
+        0.13,
+        0.15,
+        0.17,
+        0.17,
+        0.15,
+        0.24
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.36495535714285715,
+            "y": 0.3783482142857143,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6941964285714286,
+            "y": 0.5669642857142857,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.40066964285714285,
+            "y": 0.421875,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.4140625,
+            "y": 0.41517857142857145,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.41183035714285715,
+            "y": 0.6160714285714286,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6004464285714286,
+            "y": 0.38058035714285715,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6484375,
+            "y": 0.5658482142857143,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5848214285714286,
+            "y": 0.39285714285714285,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.3169642857142857,
+            "y": 0.5736607142857143,
+            "radius": 0.029017857142857144,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5602678571428571,
+            "y": 0.3950892857142857,
+            "radius": 0.044642857142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.24776785714285715,
+            "y": 0.5703125,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ]
+    },
+    "laptop": {
+      "row": 5,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.16,
+      "frame_durations": [
+        0.28,
+        0.18,
+        0.18,
+        0.3,
+        0.24,
+        0.42
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "automatic",
+      "pointer_eyes": true,
+      "contains_prop": true,
+      "eyes": [
+        [
+          {
+            "x": 0.5814732142857143,
+            "y": 0.38504464285714285,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.21986607142857142,
+            "y": 0.44308035714285715,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5758928571428571,
+            "y": 0.41294642857142855,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.22767857142857142,
+            "y": 0.46651785714285715,
+            "radius": 0.033482142857142856,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5714285714285714,
+            "y": 0.41517857142857145,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.22098214285714285,
+            "y": 0.47879464285714285,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5256696428571429,
+            "y": 0.40736607142857145,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.21428571428571427,
+            "y": 0.47544642857142855,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5747767857142857,
+            "y": 0.3939732142857143,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.24553571428571427,
+            "y": 0.47879464285714285,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5814732142857143,
+            "y": 0.4140625,
+            "radius": 0.0390625,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.2544642857142857,
+            "y": 0.46986607142857145,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "turn_left_clip": "turn-left",
+      "turn_right_clip": "turn-right"
+    },
+    "phone": {
+      "row": 6,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.2,
+      "frame_durations": [
+        0.55,
+        0.22,
+        0.52,
+        1.35,
+        0.46,
+        1.05
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "automatic",
+      "pointer_eyes": true,
+      "contains_prop": true,
+      "eyes": [
+        [
+          {
+            "x": 0.6517857142857143,
+            "y": 0.41964285714285715,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.35379464285714285,
+            "y": 0.4877232142857143,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6372767857142857,
+            "y": 0.4296875,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.35044642857142855,
+            "y": 0.4877232142857143,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6830357142857143,
+            "y": 0.4330357142857143,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.3236607142857143,
+            "y": 0.4810267857142857,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6662946428571429,
+            "y": 0.4330357142857143,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.31808035714285715,
+            "y": 0.4810267857142857,
+            "radius": 0.03459821428571429,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5814732142857143,
+            "y": 0.3984375,
+            "radius": 0.0390625,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.35044642857142855,
+            "y": 0.47433035714285715,
+            "radius": 0.036830357142857144,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6428571428571429,
+            "y": 0.40848214285714285,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.34375,
+            "y": 0.48549107142857145,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "turn_left_clip": "turn-left",
+      "turn_right_clip": "turn-right"
+    },
+    "book": {
+      "row": 7,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.18,
+      "frame_durations": [
+        0.38,
+        0.25,
+        0.3,
+        0.36,
+        0.58,
+        0.72
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "automatic",
+      "pointer_eyes": true,
+      "contains_prop": true,
+      "eyes": [
+        [
+          {
+            "x": 0.6495535714285714,
+            "y": 0.4029017857142857,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.34151785714285715,
+            "y": 0.5323660714285714,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6238839285714286,
+            "y": 0.40625,
+            "radius": 0.0390625,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.3247767857142857,
+            "y": 0.5323660714285714,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6506696428571429,
+            "y": 0.4029017857142857,
+            "radius": 0.0390625,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.34933035714285715,
+            "y": 0.5301339285714286,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6450892857142857,
+            "y": 0.40401785714285715,
+            "radius": 0.03794642857142857,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.34375,
+            "y": 0.53125,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6439732142857143,
+            "y": 0.40513392857142855,
+            "radius": 0.0390625,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.36607142857142855,
+            "y": 0.5290178571428571,
+            "radius": 0.03125,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6529017857142857,
+            "y": 0.40513392857142855,
+            "radius": 0.0390625,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.34598214285714285,
+            "y": 0.5323660714285714,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "turn_left_clip": "turn-left",
+      "turn_right_clip": "turn-right"
+    },
+    "failed": {
+      "row": 8,
+      "column_offset": 0,
+      "frame_count": 4,
+      "frame_duration": 0.24,
+      "frame_durations": [
+        0.24,
+        0.24,
+        0.24,
+        0.24
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "automatic",
+      "pointer_eyes": false,
+      "contains_prop": false,
+      "eyes": [
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    "inspect-hand": {
+      "row": 8,
+      "column_offset": 4,
+      "frame_count": 4,
+      "frame_duration": 0.24,
+      "frame_durations": [
+        0.24,
+        0.24,
+        0.24,
+        0.24
+      ],
+      "playback_mode": "enter-hold-retract",
+      "mirror_policy": "automatic",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5792410714285714,
+            "y": 0.3091517857142857,
+            "radius": 0.04575892857142857,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.18638392857142858,
+            "y": 0.41517857142857145,
+            "radius": 0.033482142857142856,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6060267857142857,
+            "y": 0.3080357142857143,
+            "radius": 0.044642857142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.21316964285714285,
+            "y": 0.4140625,
+            "radius": 0.03459821428571429,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6395089285714286,
+            "y": 0.39174107142857145,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.24888392857142858,
+            "y": 0.41629464285714285,
+            "radius": 0.03459821428571429,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6049107142857143,
+            "y": 0.3091517857142857,
+            "radius": 0.04575892857142857,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.20982142857142858,
+            "y": 0.41629464285714285,
+            "radius": 0.03459821428571429,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "hold_frame": 2,
+      "hold_duration": 0.38
+    },
+    "sharpen-tip": {
+      "row": 9,
+      "column_offset": 0,
+      "frame_count": 4,
+      "frame_duration": 0.22,
+      "frame_durations": [
+        0.22,
+        0.22,
+        0.22,
+        0.22
+      ],
+      "playback_mode": "enter-hold-retract",
+      "mirror_policy": "automatic",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5803571428571429,
+            "y": 0.38504464285714285,
+            "radius": 0.0390625,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.22767857142857142,
+            "y": 0.4955357142857143,
+            "radius": 0.029017857142857144,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5424107142857143,
+            "y": 0.38950892857142855,
+            "radius": 0.03794642857142857,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.20647321428571427,
+            "y": 0.49441964285714285,
+            "radius": 0.027901785714285716,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.4654017857142857,
+            "y": 0.4017857142857143,
+            "radius": 0.03794642857142857,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.16294642857142858,
+            "y": 0.49330357142857145,
+            "radius": 0.026785714285714284,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5770089285714286,
+            "y": 0.3939732142857143,
+            "radius": 0.036830357142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.26785714285714285,
+            "y": 0.49330357142857145,
+            "radius": 0.026785714285714284,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "hold_frame": 2,
+      "hold_duration": 0.62
+    },
+    "look-around": {
+      "row": 9,
+      "column_offset": 4,
+      "frame_count": 4,
+      "frame_duration": 0.26,
+      "frame_durations": [
+        0.26,
+        0.26,
+        0.26,
+        0.26
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "automatic",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5212053571428571,
+            "y": 0.2578125,
+            "radius": 0.05022321428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.16629464285714285,
+            "y": 0.42857142857142855,
+            "radius": 0.03571428571428571,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.29910714285714285,
+            "y": 0.31026785714285715,
+            "radius": 0.049107142857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.15290178571428573,
+            "y": 0.453125,
+            "radius": 0.03794642857142857,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.28125,
+            "y": 0.30245535714285715,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.17745535714285715,
+            "y": 0.4654017857142857,
+            "radius": 0.0390625,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5970982142857143,
+            "y": 0.2689732142857143,
+            "radius": 0.04799107142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ]
+      ]
+    },
+    "stretch": {
+      "row": 10,
+      "column_offset": 0,
+      "frame_count": 4,
+      "frame_duration": 0.26,
+      "frame_durations": [
+        0.26,
+        0.26,
+        0.26,
+        0.26
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "automatic",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5758928571428571,
+            "y": 0.35714285714285715,
+            "radius": 0.04017857142857143,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.1953125,
+            "y": 0.4609375,
+            "radius": 0.030133928571428572,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6071428571428571,
+            "y": 0.18191964285714285,
+            "radius": 0.04575892857142857,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.18191964285714285,
+            "y": 0.4654017857142857,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.8627232142857143,
+            "y": 0.14620535714285715,
+            "radius": 0.04352678571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.07254464285714286,
+            "y": 0.43191964285714285,
+            "radius": 0.03459821428571429,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5926339285714286,
+            "y": 0.36049107142857145,
+            "radius": 0.0390625,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.22098214285714285,
+            "y": 0.46651785714285715,
+            "radius": 0.029017857142857144,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ]
+    },
+    "dormant": {
+      "row": 10,
+      "column_offset": 4,
+      "frame_count": 4,
+      "frame_duration": 0.3,
+      "frame_durations": [
+        0.3,
+        0.3,
+        0.3,
+        0.3
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "automatic",
+      "pointer_eyes": false,
+      "contains_prop": false,
+      "eyes": [
+        [],
+        [],
+        [],
+        []
+      ],
+      "loop_range": [
+        1,
+        2
+      ]
+    },
+    "rapid-notes": {
+      "row": 11,
+      "column_offset": 0,
+      "frame_count": 4,
+      "frame_duration": 0.24,
+      "frame_durations": [
+        0.24,
+        0.24,
+        0.24,
+        0.24
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "automatic",
+      "pointer_eyes": true,
+      "contains_prop": true,
+      "eyes": [
+        [
+          {
+            "x": 0.59375,
+            "y": 0.38392857142857145,
+            "radius": 0.03571428571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.29017857142857145,
+            "y": 0.4765625,
+            "radius": 0.025669642857142856,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.59375,
+            "y": 0.3950892857142857,
+            "radius": 0.03571428571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.3013392857142857,
+            "y": 0.48549107142857145,
+            "radius": 0.024553571428571428,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.6037946428571429,
+            "y": 0.42299107142857145,
+            "radius": 0.036830357142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.3247767857142857,
+            "y": 0.5066964285714286,
+            "radius": 0.0234375,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5970982142857143,
+            "y": 0.39955357142857145,
+            "radius": 0.03459821428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.31026785714285715,
+            "y": 0.48325892857142855,
+            "radius": 0.0234375,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "turn_left_clip": "turn-left",
+      "turn_right_clip": "turn-right"
+    },
+    "fine-motor": {
+      "row": 11,
+      "column_offset": 4,
+      "frame_count": 4,
+      "frame_duration": 0.2,
+      "frame_durations": [
+        0.2,
+        0.2,
+        0.2,
+        0.2
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "automatic",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5390625,
+            "y": 0.3125,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.1484375,
+            "y": 0.42075892857142855,
+            "radius": 0.03459821428571429,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5714285714285714,
+            "y": 0.3169642857142857,
+            "radius": 0.044642857142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.17745535714285715,
+            "y": 0.42410714285714285,
+            "radius": 0.033482142857142856,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5513392857142857,
+            "y": 0.3158482142857143,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.15625,
+            "y": 0.4330357142857143,
+            "radius": 0.04017857142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5569196428571429,
+            "y": 0.3169642857142857,
+            "radius": 0.044642857142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.16629464285714285,
+            "y": 0.42745535714285715,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "turn_left_clip": "turn-left",
+      "turn_right_clip": "turn-right"
+    },
+    "organ-drift": {
+      "row": 12,
+      "column_offset": 0,
+      "frame_count": 4,
+      "frame_duration": 0.3,
+      "frame_durations": [
+        0.3,
+        0.3,
+        0.3,
+        0.3
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "automatic",
+      "pointer_eyes": false,
+      "contains_prop": false,
+      "eyes": [
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    "logic-count": {
+      "row": 12,
+      "column_offset": 4,
+      "frame_count": 4,
+      "frame_duration": 0.28,
+      "frame_durations": [
+        0.28,
+        0.28,
+        0.28,
+        0.28
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "automatic",
+      "pointer_eyes": false,
+      "contains_prop": false,
+      "eyes": [
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    "normal-hand": {
+      "row": 13,
+      "column_offset": 0,
+      "frame_count": 4,
+      "frame_duration": 0.42,
+      "frame_durations": [
+        0.62,
+        0.42,
+        0.34,
+        0.58
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [],
+        [
+          {
+            "x": 0.47595143826761477,
+            "y": 0.572463841305753,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.45200892857142855,
+            "y": 0.6049107142857143,
+            "radius": 0.040290178571428574,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        []
+      ],
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        }
+      ]
+    },
+    "calm-diagnosis": {
+      "row": 13,
+      "column_offset": 4,
+      "frame_count": 4,
+      "frame_duration": 0.26,
+      "frame_durations": [
+        0.24,
+        0.28,
+        0.58,
+        0.34
+      ],
+      "playback_mode": "enter-hold-retract",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.47702088647959184,
+            "y": 0.6563895089285714,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.4609375,
+            "y": 0.6554129464285714,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.4581400742115028,
+            "y": 0.3280597750463822,
+            "radius": 0.0296875,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          },
+          {
+            "x": 0.5041155133928571,
+            "y": 0.4793178013392857,
+            "radius": 0.010602678571428572,
+            "tracking_id": "branch-2",
+            "tracking_gain": 0.68,
+            "vertical_gain": 0.64,
+            "tracking_stiffness": 7.0
+          }
+        ],
+        [
+          {
+            "x": 0.4647031068524971,
+            "y": 0.6522121806039489,
+            "radius": 0.033928571428571426,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.4945238095238095,
+            "y": 0.3497619047619048,
+            "radius": 0.0296875,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          },
+          {
+            "x": 0.5554563492063492,
+            "y": 0.47772817460317457,
+            "radius": 0.016964285714285713,
+            "tracking_id": "branch-2",
+            "tracking_gain": 0.68,
+            "vertical_gain": 0.64,
+            "tracking_stiffness": 7.0
+          }
+        ],
+        [
+          {
+            "x": 0.47921316964285715,
+            "y": 0.6625279017857143,
+            "radius": 0.025446428571428568,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ]
+      ],
+      "hold_frame": 2,
+      "hold_duration": 0.62,
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        }
+      ]
+    },
+    "palm-observer": {
+      "row": 14,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.24,
+      "frame_durations": [
+        0.3,
+        0.24,
+        0.22,
+        0.58,
+        0.26,
+        0.34
+      ],
+      "playback_mode": "enter-hold-retract",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.4621896777003484,
+            "y": 0.6521395905923344,
+            "radius": 0.016964285714285713,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.4705099587912088,
+            "y": 0.6518071771978021,
+            "radius": 0.016964285714285713,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.595093178986711,
+            "y": 0.33367291320598,
+            "radius": 0.040290178571428574,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.47342633928571426,
+            "y": 0.63765625,
+            "radius": 0.0296875,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.578422619047619,
+            "y": 0.3208333333333333,
+            "radius": 0.03816964285714285,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.4711277173913043,
+            "y": 0.6362456327639752,
+            "radius": 0.021205357142857144,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5920386904761904,
+            "y": 0.4563881802721088,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.4654017857142857,
+            "y": 0.6540450783972125,
+            "radius": 0.019084821428571427,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ]
+      ],
+      "hold_frame": 3,
+      "hold_duration": 0.58,
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        }
+      ]
+    },
+    "signal-sampling": {
+      "row": 15,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.22,
+      "frame_durations": [
+        0.28,
+        0.22,
+        0.2,
+        0.64,
+        0.22,
+        0.32
+      ],
+      "playback_mode": "enter-hold-retract",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.481858944235589,
+            "y": 0.7003739818295739,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.621422006302521,
+            "y": 0.3751723345588235,
+            "radius": 0.033928571428571426,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.484375,
+            "y": 0.6993447580645161,
+            "radius": 0.033928571428571426,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.552324646074646,
+            "y": 0.36960062741312744,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.4315023291925466,
+            "y": 0.6984666149068323,
+            "radius": 0.0296875,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          },
+          {
+            "x": 0.28236607142857145,
+            "y": 0.43080357142857145,
+            "radius": 0.021205357142857144,
+            "tracking_id": "branch-2",
+            "tracking_gain": 0.68,
+            "vertical_gain": 0.64,
+            "tracking_stiffness": 7.0
+          },
+          {
+            "x": 0.7204241071428571,
+            "y": 0.5290178571428571,
+            "radius": 0.01484375,
+            "tracking_id": "branch-3",
+            "tracking_gain": 0.74,
+            "vertical_gain": 0.6900000000000001,
+            "tracking_stiffness": 7.449999999999999
+          }
+        ],
+        [
+          {
+            "x": 0.38839285714285715,
+            "y": 0.33370535714285715,
+            "radius": 0.04453125,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6735082752613241,
+            "y": 0.3415110518292683,
+            "radius": 0.03816964285714285,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          },
+          {
+            "x": 0.4682388222464558,
+            "y": 0.6992144901853871,
+            "radius": 0.033928571428571426,
+            "tracking_id": "branch-2",
+            "tracking_gain": 0.68,
+            "vertical_gain": 0.64,
+            "tracking_stiffness": 7.0
+          },
+          {
+            "x": 0.339057944606414,
+            "y": 0.4897048104956268,
+            "radius": 0.021205357142857144,
+            "tracking_id": "branch-3",
+            "tracking_gain": 0.74,
+            "vertical_gain": 0.6900000000000001,
+            "tracking_stiffness": 7.449999999999999
+          },
+          {
+            "x": 0.6464573732718895,
+            "y": 0.5475950460829493,
+            "radius": 0.016964285714285713,
+            "tracking_id": "branch-4",
+            "tracking_gain": 0.8,
+            "vertical_gain": 0.74,
+            "tracking_stiffness": 7.8999999999999995
+          }
+        ],
+        [
+          {
+            "x": 0.4567801339285714,
+            "y": 0.6981863839285715,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.5404829545454545,
+            "y": 0.3964082792207792,
+            "radius": 0.027566964285714285,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          },
+          {
+            "x": 0.6523779154518952,
+            "y": 0.5999453352769679,
+            "radius": 0.016964285714285713,
+            "tracking_id": "branch-2",
+            "tracking_gain": 0.68,
+            "vertical_gain": 0.64,
+            "tracking_stiffness": 7.0
+          }
+        ],
+        [
+          {
+            "x": 0.48325892857142855,
+            "y": 0.6988565162907268,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ]
+      ],
+      "hold_frame": 3,
+      "hold_duration": 0.7,
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        },
+        {
+          "x": 0.4,
+          "y": 0.22,
+          "radius_x": 0.3,
+          "radius_y": 0.28,
+          "gain": 1.18
+        },
+        {
+          "x": 0.72,
+          "y": 0.18,
+          "radius_x": 0.27,
+          "radius_y": 0.25,
+          "gain": 1.12
+        }
+      ]
+    },
+    "storage-pocket": {
+      "row": 16,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.24,
+      "frame_durations": [
+        0.3,
+        0.24,
+        0.24,
+        0.72,
+        0.26,
+        0.34
+      ],
+      "playback_mode": "enter-hold-retract",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": true,
+      "eyes": [
+        [
+          {
+            "x": 0.47315189662821655,
+            "y": 0.5906513420585625,
+            "radius": 0.03816964285714285,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.4735132334183674,
+            "y": 0.5908203125,
+            "radius": 0.03816964285714285,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.47123309382924766,
+            "y": 0.5908376479289942,
+            "radius": 0.0296875,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.42445509453781505,
+            "y": 0.5909007352941177,
+            "radius": 0.0296875,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.4723958333333333,
+            "y": 0.5912540584415584,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.46931843389529726,
+            "y": 0.591961512866016,
+            "radius": 0.03816964285714285,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ]
+      ],
+      "hold_frame": 3,
+      "hold_duration": 0.66,
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        }
+      ],
+      "rigid_zones": [
+        {
+          "min_x": 0.57,
+          "min_y": 0.15,
+          "max_x": 0.86,
+          "max_y": 0.68,
+          "feather": 0.035
+        }
+      ]
+    },
+    "recovery-care": {
+      "row": 17,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.28,
+      "frame_durations": [
+        0.34,
+        0.26,
+        0.3,
+        0.78,
+        0.3,
+        0.42
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": true,
+      "eyes": [
+        [
+          {
+            "x": 0.45973265016233766,
+            "y": 0.6455775669642858,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.42049459586466165,
+            "y": 0.7828506813909775,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.5028502747252748,
+            "y": 0.31969436813186813,
+            "radius": 0.025446428571428568,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.49202244718309857,
+            "y": 0.7395623742454729,
+            "radius": 0.023325892857142854,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.45566526073619634,
+            "y": 0.743399430324277,
+            "radius": 0.040290178571428574,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.639738906926407,
+            "y": 0.45010146103896104,
+            "radius": 0.03180803571428571,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.43103637160385627,
+            "y": 0.7607635845749342,
+            "radius": 0.0296875,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.46063806620209063,
+            "y": 0.6457589285714286,
+            "radius": 0.033928571428571426,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ]
+      ],
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        }
+      ],
+      "rigid_zones": [
+        {
+          "min_x": 0.5,
+          "min_y": 0.08,
+          "max_x": 0.82,
+          "max_y": 0.7,
+          "feather": 0.035
+        }
+      ]
+    },
+    "detached-scout-return": {
+      "row": 18,
+      "column_offset": 0,
+      "frame_count": 8,
+      "frame_duration": 0.2,
+      "frame_durations": [
+        0.28,
+        0.22,
+        0.2,
+        0.24,
+        0.3,
+        0.28,
+        0.24,
+        0.42
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5007138324873096,
+            "y": 0.6190400652646846,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.5026605339105339,
+            "y": 0.6189123376623377,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.393318376457726,
+            "y": 0.6175860969387755,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.7845982142857143,
+            "y": 0.6037946428571429,
+            "radius": 0.040290178571428574,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5704613095238095,
+            "y": 0.7895032051282052,
+            "radius": 0.040290178571428574,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.5146666978309649,
+            "y": 0.7587649588631263,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.3332160450387051,
+            "y": 0.8288287297677692,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.3982879234167894,
+            "y": 0.6173025589101621,
+            "radius": 0.04241071428571429,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.7832454004329005,
+            "y": 0.582907196969697,
+            "radius": 0.03816964285714285,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.5016088050911854,
+            "y": 0.6178583301671733,
+            "radius": 0.03604910714285714,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ]
+      ],
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        }
+      ]
+    },
+    "complete-sleep": {
+      "row": 19,
+      "column_offset": 0,
+      "frame_count": 8,
+      "frame_duration": 0.34,
+      "frame_durations": [
+        0.3,
+        0.28,
+        0.28,
+        0.34,
+        0.8,
+        0.8,
+        0.32,
+        0.34
+      ],
+      "playback_mode": "loop",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.6027116402116403,
+            "y": 0.3214699074074074,
+            "radius": 0.03604910714285714,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.6048469387755102,
+            "y": 0.5798256802721088,
+            "radius": 0.025446428571428568,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        [
+          {
+            "x": 0.47629510788690477,
+            "y": 0.6658877418154762,
+            "radius": 0.0296875,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.5715242346938776,
+            "y": 0.3959821428571429,
+            "radius": 0.033928571428571426,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ]
+      ],
+      "loop_range": [
+        4,
+        5
+      ],
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        }
+      ]
+    },
+    "protective-shield": {
+      "row": 20,
+      "column_offset": 0,
+      "frame_count": 6,
+      "frame_duration": 0.2,
+      "frame_durations": [
+        0.24,
+        0.2,
+        0.2,
+        0.62,
+        0.22,
+        0.32
+      ],
+      "playback_mode": "enter-hold-retract",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.5394143051242236,
+            "y": 0.4011912849378882,
+            "radius": 0.021205357142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.4786152742346939,
+            "y": 0.6453683035714286,
+            "radius": 0.016964285714285713,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ],
+        [
+          {
+            "x": 0.529718646179402,
+            "y": 0.3978664867109635,
+            "radius": 0.0296875,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.44418329831932774,
+            "y": 0.3836922268907563,
+            "radius": 0.027566964285714285,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.4853316326530612,
+            "y": 0.42697704081632654,
+            "radius": 0.021205357142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.5574600563909774,
+            "y": 0.40032894736842106,
+            "radius": 0.021205357142857144,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.539248511904762,
+            "y": 0.4019252232142857,
+            "radius": 0.03180803571428571,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.47939996973365623,
+            "y": 0.6461864406779662,
+            "radius": 0.01484375,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "hold_frame": 3,
+      "hold_duration": 0.62,
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        },
+        {
+          "x": 0.52,
+          "y": 0.42,
+          "radius_x": 0.44,
+          "radius_y": 0.36,
+          "gain": 0.88
+        }
+      ]
+    },
+    "idle-left": {
+      "row": 2,
+      "column_offset": 0,
+      "frame_count": 1,
+      "frame_duration": 0.45,
+      "frame_durations": [
+        0.45
+      ],
+      "playback_mode": "hold",
+      "hold_frame": 0,
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.3158482142857143,
+            "y": 0.37388392857142855,
+            "radius": 0.041294642857142856,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          },
+          {
+            "x": 0.6495535714285714,
+            "y": 0.5122767857142857,
+            "radius": 0.03236607142857143,
+            "tracking_id": "branch-1",
+            "tracking_gain": 0.6200000000000001,
+            "vertical_gain": 0.5900000000000001,
+            "tracking_stiffness": 6.55
+          }
+        ]
+      ],
+      "turn_left_clip": "turn-left",
+      "turn_right_clip": "turn-right"
+    },
+    "complete-sleep-wake": {
+      "row": 19,
+      "column_offset": 6,
+      "frame_count": 2,
+      "frame_duration": 0.32,
+      "frame_durations": [
+        0.32,
+        0.36
+      ],
+      "playback_mode": "once",
+      "mirror_policy": "never",
+      "pointer_eyes": true,
+      "contains_prop": false,
+      "eyes": [
+        [
+          {
+            "x": 0.47629510788690477,
+            "y": 0.6658877418154762,
+            "radius": 0.0296875,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ],
+        [
+          {
+            "x": 0.5715242346938776,
+            "y": 0.3959821428571429,
+            "radius": 0.033928571428571426,
+            "tracking_id": "primary",
+            "tracking_gain": 0.78,
+            "vertical_gain": 0.7,
+            "tracking_stiffness": 7.8
+          }
+        ]
+      ],
+      "deformation_zones": [
+        {
+          "x": 0.43,
+          "y": 0.68,
+          "radius_x": 0.4,
+          "radius_y": 0.3,
+          "gain": 0.62
+        },
+        {
+          "x": 0.55,
+          "y": 0.42,
+          "radius_x": 0.32,
+          "radius_y": 0.38,
+          "gain": 0.84
+        },
+        {
+          "x": 0.7,
+          "y": 0.25,
+          "radius_x": 0.26,
+          "radius_y": 0.28,
+          "gain": 1.0
+        }
+      ]
+    }
+  },
+  "source_sha256": {
+    "idle": "d846505dbaf4583a9d9d50c800dd2fd30503ab1afba03c0a5a37b5c4db35a309",
+    "patrol": "f8d092f56b3fe3046178a5709293f21002a0fc0f70b1dd5297f55431da185a5f",
+    "patrol-left": "8405d818eff3c9fcc0e59d18855ef1cc3c0c4822b6876e8355ee9e380f9c72af",
+    "turn-left": "1ff4b67772a1e7c9a366ff29a5050146a80d2bfacf504cd6f84ffe79d7c49653",
+    "turn-right": "1ff4b67772a1e7c9a366ff29a5050146a80d2bfacf504cd6f84ffe79d7c49653",
+    "laptop": "56417041b1f5838dadd2c7aa660b435589ae08a6b95610fa685d1edaf83df4bf",
+    "phone": "88e4dcaa6fdca871dc81f161b000a9fb8f619e05c4faaf55bb80f76287ca0051",
+    "book": "ec16883b62c1841bc4d9f68d805f4be80085f3150d7638c4e93b0d81ca64161b",
+    "failed": "af45241b11c370c0627ede07878805ce374932dbd69e9f67c7dcf9e4dbf7b86e",
+    "inspect-hand": "f281ea96396c8fe7eb56c0c2ddccde0d09dcd53ec8dff77952cb6dd9e80cc779",
+    "sharpen-tip": "d305904d521e620f49dcce1d5ba79f2b67798042b09e68d80b6c7c85fb203607",
+    "look-around": "c8ff26c19bdce106d4b3a1afe1df9c02c28fef166fc11fd63447c127268f91eb",
+    "stretch": "e513322bd0d7a479ef8e8dd3a515e0c9df6397dcb9dd86aa3435ad744fef85af",
+    "dormant": "b37b9b44d3fc5432fffd36c2c3fe346e1dae023b6b75f7e308a65231068058fe",
+    "rapid-notes": "c1bbdb0c6401c2b7a321a9ac6304f543627d9341a2b95f3aedcf1fabb432d906",
+    "fine-motor": "d9ea3800a9ab7d1577b756644f0dc961703d54ee152d61cc0e0c2ddd16e5580b",
+    "organ-drift": "2fffe739ad0cb144275be88b50f27b11c71472ffd68f517349edc6b431dced51",
+    "logic-count": "8fc8e3c1c802c040c8c1fee684a4459fcb9741fda59b8b35686842bfd33b58c2",
+    "normal-hand": "07c6a2c4a393318f99315a33e0fd982b4f19c285bbbe9eea5bc6a6df88a5d25d",
+    "calm-diagnosis": "af084d00fd7a3b562d56fb72c0828dc3e88194ec5aff2aea1f809dc8262183c7",
+    "palm-observer": "05d87b437fad8065f62f07ae8500537561fbbf8d2932219c7b76fc6fe2484270",
+    "signal-sampling": "5927608b303e0bd60a5ed5a606976f8ad226e78241d8ec7e5dbb9bd42a107e60",
+    "storage-pocket": "3ad48c935074ff22179908f39c67392ae43253dd712af7296e600ef85bb18b5e",
+    "recovery-care": "ac1136ae43caf251a36071f40e73cedcbd46e3fa69530f18b3182fd4381d1179",
+    "detached-scout-return": "5f8d6f5e6d3bd8605454ff6bffba79a171150b2e378da402120602513600f881",
+    "complete-sleep": "a566b313be1e4834e441fb4a9abf0e7acf90510bb937905c2a7a82494a4df623",
+    "protective-shield": "7c7a6a7aba2afe95c618218a9ae5ec652f00e382854682f6ea5aa644e85618dc"
+  }
+}

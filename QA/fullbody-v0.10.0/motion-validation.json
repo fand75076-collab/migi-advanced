@@ -1,0 +1,604 @@
+{
+  "ok": true,
+  "errors": [],
+  "atlas": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/Sources/MigiAdvanced/Resources/migi-v4-atlas.png",
+  "atlas_sha256": "630080752431281387159863d532c649d13a3cee430fd61660805bf30bda3f8e",
+  "manifest": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/Sources/MigiAdvanced/Resources/migi-v4-atlas.json",
+  "manifest_sha256": "3a68d95628c8f54e75f15211419e8e55050177d0df851cde6871bf354e78a4c0",
+  "clip_count": 29,
+  "new_clip_frames": {
+    "normal-hand": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          111,
+          126,
+          337,
+          436
+        ],
+        "eye_count": 0
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          111,
+          126,
+          337,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 2,
+        "alpha_bbox": [
+          99,
+          126,
+          349,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 3,
+        "alpha_bbox": [
+          111,
+          126,
+          337,
+          436
+        ],
+        "eye_count": 0
+      }
+    ],
+    "calm-diagnosis": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          128,
+          196,
+          319,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          125,
+          126,
+          322,
+          436
+        ],
+        "eye_count": 3
+      },
+      {
+        "frame": 2,
+        "alpha_bbox": [
+          124,
+          132,
+          323,
+          436
+        ],
+        "eye_count": 3
+      },
+      {
+        "frame": 3,
+        "alpha_bbox": [
+          128,
+          197,
+          319,
+          436
+        ],
+        "eye_count": 1
+      }
+    ],
+    "palm-observer": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          148,
+          209,
+          299,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          148,
+          209,
+          299,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 2,
+        "alpha_bbox": [
+          148,
+          129,
+          300,
+          436
+        ],
+        "eye_count": 2
+      },
+      {
+        "frame": 3,
+        "alpha_bbox": [
+          148,
+          126,
+          299,
+          436
+        ],
+        "eye_count": 2
+      },
+      {
+        "frame": 4,
+        "alpha_bbox": [
+          148,
+          181,
+          300,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 5,
+        "alpha_bbox": [
+          149,
+          210,
+          299,
+          436
+        ],
+        "eye_count": 1
+      }
+    ],
+    "signal-sampling": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          150,
+          231,
+          297,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          150,
+          151,
+          297,
+          436
+        ],
+        "eye_count": 2
+      },
+      {
+        "frame": 2,
+        "alpha_bbox": [
+          116,
+          152,
+          331,
+          436
+        ],
+        "eye_count": 4
+      },
+      {
+        "frame": 3,
+        "alpha_bbox": [
+          134,
+          126,
+          314,
+          436
+        ],
+        "eye_count": 5
+      },
+      {
+        "frame": 4,
+        "alpha_bbox": [
+          139,
+          160,
+          309,
+          436
+        ],
+        "eye_count": 3
+      },
+      {
+        "frame": 5,
+        "alpha_bbox": [
+          150,
+          230,
+          297,
+          436
+        ],
+        "eye_count": 1
+      }
+    ],
+    "storage-pocket": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          134,
+          126,
+          314,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          135,
+          126,
+          313,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 2,
+        "alpha_bbox": [
+          135,
+          126,
+          313,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 3,
+        "alpha_bbox": [
+          115,
+          126,
+          333,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 4,
+        "alpha_bbox": [
+          136,
+          126,
+          312,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 5,
+        "alpha_bbox": [
+          135,
+          126,
+          312,
+          436
+        ],
+        "eye_count": 1
+      }
+    ],
+    "recovery-care": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          126,
+          126,
+          321,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          107,
+          129,
+          341,
+          436
+        ],
+        "eye_count": 2
+      },
+      {
+        "frame": 2,
+        "alpha_bbox": [
+          122,
+          128,
+          325,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 3,
+        "alpha_bbox": [
+          140,
+          144,
+          308,
+          436
+        ],
+        "eye_count": 2
+      },
+      {
+        "frame": 4,
+        "alpha_bbox": [
+          125,
+          242,
+          322,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 5,
+        "alpha_bbox": [
+          126,
+          126,
+          321,
+          436
+        ],
+        "eye_count": 1
+      }
+    ],
+    "detached-scout-return": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          132,
+          136,
+          315,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          133,
+          136,
+          315,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 2,
+        "alpha_bbox": [
+          84,
+          136,
+          364,
+          436
+        ],
+        "eye_count": 2
+      },
+      {
+        "frame": 3,
+        "alpha_bbox": [
+          180,
+          324,
+          268,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 4,
+        "alpha_bbox": [
+          184,
+          312,
+          263,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 5,
+        "alpha_bbox": [
+          108,
+          342,
+          340,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 6,
+        "alpha_bbox": [
+          85,
+          136,
+          363,
+          436
+        ],
+        "eye_count": 2
+      },
+      {
+        "frame": 7,
+        "alpha_bbox": [
+          133,
+          137,
+          315,
+          436
+        ],
+        "eye_count": 1
+      }
+    ],
+    "complete-sleep": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          147,
+          126,
+          301,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          147,
+          204,
+          301,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 2,
+        "alpha_bbox": [
+          147,
+          204,
+          301,
+          436
+        ],
+        "eye_count": 0
+      },
+      {
+        "frame": 3,
+        "alpha_bbox": [
+          148,
+          205,
+          300,
+          436
+        ],
+        "eye_count": 0
+      },
+      {
+        "frame": 4,
+        "alpha_bbox": [
+          148,
+          205,
+          300,
+          436
+        ],
+        "eye_count": 0
+      },
+      {
+        "frame": 5,
+        "alpha_bbox": [
+          148,
+          205,
+          299,
+          436
+        ],
+        "eye_count": 0
+      },
+      {
+        "frame": 6,
+        "alpha_bbox": [
+          148,
+          204,
+          300,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 7,
+        "alpha_bbox": [
+          148,
+          157,
+          300,
+          436
+        ],
+        "eye_count": 1
+      }
+    ],
+    "complete-sleep-wake": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          148,
+          204,
+          300,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          148,
+          157,
+          300,
+          436
+        ],
+        "eye_count": 1
+      }
+    ],
+    "protective-shield": [
+      {
+        "frame": 0,
+        "alpha_bbox": [
+          167,
+          163,
+          280,
+          436
+        ],
+        "eye_count": 2
+      },
+      {
+        "frame": 1,
+        "alpha_bbox": [
+          169,
+          162,
+          279,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 2,
+        "alpha_bbox": [
+          127,
+          157,
+          320,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 3,
+        "alpha_bbox": [
+          144,
+          126,
+          303,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 4,
+        "alpha_bbox": [
+          175,
+          162,
+          272,
+          436
+        ],
+        "eye_count": 1
+      },
+      {
+        "frame": 5,
+        "alpha_bbox": [
+          167,
+          164,
+          280,
+          436
+        ],
+        "eye_count": 2
+      }
+    ]
+  },
+  "contact_sheet": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/new-clips-contact.png",
+  "gifs": {
+    "normal-hand": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/normal-hand.gif",
+    "calm-diagnosis": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/calm-diagnosis.gif",
+    "palm-observer": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/palm-observer.gif",
+    "signal-sampling": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/signal-sampling.gif",
+    "storage-pocket": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/storage-pocket.gif",
+    "recovery-care": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/recovery-care.gif",
+    "detached-scout-return": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/detached-scout-return.gif",
+    "complete-sleep": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/complete-sleep.gif",
+    "complete-sleep-wake": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/complete-sleep-wake.gif",
+    "protective-shield": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/fullbody-v0.10.0/gifs/protective-shield.gif"
+  }
+}
