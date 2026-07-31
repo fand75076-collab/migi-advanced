@@ -6,12 +6,13 @@ import simd
 ///
 /// Authored cells remain the source of truth for anatomy, props and direction.
 /// Metal adds only bounded regional motion, slow eye-surface tracking and
-/// root-to-tip tissue replacement between those cells; it never rebuilds Migi
-/// from detachable template parts.
+/// root-to-tip tissue replacement between semantic poses; it never rebuilds
+/// Migi from detachable template parts.
 final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private static let inFlightBufferCount = 3
     private static let maximumQACaptureAttempts = 3
-    private static let ordinaryHandoffDuration: TimeInterval = 0.36
+    private static let ordinaryHandoffDuration =
+        MigiAnimationTiming.semanticHandoffDuration
     private static let urgentHandoffDuration: TimeInterval = 0.16
     private static let sleepHandoffDuration: TimeInterval = 0.52
     private static let authoredFrameHandoffDuration: TimeInterval = 0.085
@@ -23,6 +24,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
 
     private let commandQueue: MTLCommandQueue
     private let texturePipeline: MTLRenderPipelineState
+    private let transitionTexturePipeline: MTLRenderPipelineState
     private let colorPipeline: MTLRenderPipelineState
     private let spriteTexture: MTLTexture
     private let atlas: V4AtlasManifest
@@ -63,6 +65,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private var demoMode = false
     private var fixedDemoActivity: CodexActivity?
     private var demoStartTime: TimeInterval?
+    private var demoStateDuration: TimeInterval = 8
     private var lastDemoIndex = -1
     private var latestLiveSnapshot = CodexActivitySnapshot(
         activity: .idle,
@@ -81,6 +84,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private var hoverReleaseUntil: TimeInterval = 0
     private var hoverAttentionIsActive = false
     private var forcedHoverAttention: Bool?
+    private var pendingQAInteractionAfterDemoSetup = false
 
     var isDemoModeEnabled: Bool { demoMode }
     override var isOpaque: Bool { false }
@@ -128,6 +132,14 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             vertex: "fullSpriteVertex",
             fragment: "fullSpriteFragment",
             sampleCount: sampleCount
+        )
+        transitionTexturePipeline = Self.makePipeline(
+            device: device,
+            library: library,
+            vertex: "fullSpriteVertex",
+            fragment: "fullSpritePremultipliedFragment",
+            sampleCount: sampleCount,
+            blendMode: .additivePremultiplied
         )
         colorPipeline = Self.makePipeline(
             device: device,
@@ -180,6 +192,11 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         } else if !enabled {
             behavior.force(latestLiveSnapshot)
         }
+    }
+
+    func setQADemoStateDuration(_ duration: TimeInterval) {
+        guard duration.isFinite else { return }
+        demoStateDuration = min(max(duration, 0.25), 8)
     }
 
     func requestQACapture(to url: URL) {
@@ -246,7 +263,14 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     }
 
     func triggerQAInteraction() {
-        behavior.ingestInteraction(.tap)
+        if demoMode, forcedWakePhase == nil, lastDemoIndex < 0 {
+            // Fixed demo state is applied on the first render callback. Queue
+            // the synthetic tap until after that force/reset so QA captures the
+            // actual interaction instead of a normal idle cell.
+            pendingQAInteractionAfterDemoSetup = true
+        } else {
+            behavior.ingestInteraction(.tap)
+        }
         setFrameRate(60)
     }
 
@@ -326,11 +350,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 deltaTime: deltaTime
             )
 
-            guard let descriptor = currentRenderPassDescriptor,
-                  let drawable = currentDrawable,
-                  let commandBuffer = commandQueue.makeCommandBuffer(),
-                  let bufferSlot = reserveBufferSlot()
-            else {
+            guard let bufferSlot = reserveBufferSlot() else {
                 return
             }
             var bufferSlotNeedsImmediateRelease = true
@@ -340,13 +360,24 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 }
             }
 
+            guard let descriptor = currentRenderPassDescriptor,
+                  let drawable = currentDrawable,
+                  let commandBuffer = commandQueue.makeCommandBuffer()
+            else {
+                return
+            }
+
             guard let gpuScene = prepareGPUScene(scene, slot: bufferSlot),
                   let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor)
             else {
                 return
             }
 
-            encodeSprite(gpuScene.sprite, with: encoder)
+            encodeSprite(
+                gpuScene.sprite,
+                transitionCompositing: gpuScene.usesTransitionCompositing,
+                with: encoder
+            )
             if let eyes = gpuScene.eyes {
                 encodeEyes(eyes, with: encoder)
             }
@@ -409,7 +440,6 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
 
     override func mouseEntered(with event: NSEvent) {
         pointerIsInsidePanel = true
-        setFrameRate(60)
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -420,7 +450,6 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 ProcessInfo.processInfo.systemUptime
                     + Self.hoverReleaseDuration
         }
-        setFrameRate(60)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -495,14 +524,22 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             guard index != lastDemoIndex else { return }
             lastDemoIndex = index
             behavior.force(demoSnapshot(for: fixedDemoActivity))
+            consumePendingQAInteractionAfterDemoSetup()
             return
         }
 
         let elapsed = max(0, time - (demoStartTime ?? time))
-        let index = Int(elapsed / 8.0) % activities.count
+        let index = Int(elapsed / demoStateDuration) % activities.count
         guard index != lastDemoIndex else { return }
         lastDemoIndex = index
         behavior.force(demoSnapshot(for: activities[index]))
+        consumePendingQAInteractionAfterDemoSetup()
+    }
+
+    private func consumePendingQAInteractionAfterDemoSetup() {
+        guard pendingQAInteractionAfterDemoSetup else { return }
+        pendingQAInteractionAfterDemoSetup = false
+        behavior.ingestInteraction(.tap)
     }
 
     private func demoSnapshot(for activity: CodexActivity) -> CodexActivitySnapshot {
@@ -750,14 +787,6 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         let presentationChanged =
             lastPresentationIdentity != nil
                 && lastPresentationIdentity != currentIdentity
-        let authoredCellChanged =
-            lastSpriteSelection.map {
-                $0.row != selection.row
-                    || $0.column != selection.column
-                    || $0.clipName != selection.clipName
-                    || $0.mirrored != selection.mirrored
-            } ?? false
-
         let requiresImmediateSemanticPose =
             behavior.activity == .waiting || behavior.activity == .failed
         if requiresImmediateSemanticPose,
@@ -861,21 +890,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             self.authoredFrameHandoff = nil
         }
 
-        if wakeHandoff == nil,
-           ordinaryHandoff == nil,
-           authoredCellChanged,
-           !presentationChanged,
-           let previous = lastSpriteSelection
-        {
-            // Authored keyframes remain crisp, but their local tissue regions
-            // replace one another over a few display frames rather than popping.
-            authoredFrameHandoff = V4SpriteHandoff(
-                previous: previous,
-                startedAt: time,
-                duration: Self.authoredFrameHandoffDuration,
-                kind: .authoredFrame
-            )
-        }
+        // Same-presentation authored cells are animation frames, not semantic
+        // morphs. They advance directly. Crossfading every cell drew two full
+        // sprites with source-over blending, periodically reducing composite
+        // opacity and producing duplicate eyes and limbs.
 
         lastWakePhase = behavior.wakePhase
         lastPresentationIdentity = currentIdentity
@@ -1802,28 +1820,23 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 transition: incoming,
                 transitionRootAxis: transitionRootAxis
             )
+            // The tissue layers are premultiplied and added as one opacity-
+            // conserving composite. Eyes are identity-critical organs, so keep
+            // exactly one tracked set and switch it with the dominant body.
+            let eyeSelection =
+                progress < 0.5 ? activeHandoff.previous : selection
             appendPointerEyes(
-                for: activeHandoff.previous,
+                for: eyeSelection,
                 center: center,
                 size: size,
                 phase: phase,
                 deltaTime: deltaTime,
                 behavior: behavior,
                 blink: blink,
-                transition: outgoing,
-                transitionRootAxis: transitionRootAxis,
-                trackingNamespace: "handoff-old"
-            )
-            appendPointerEyes(
-                for: selection,
-                center: center,
-                size: size,
-                phase: phase,
-                deltaTime: deltaTime,
-                behavior: behavior,
-                blink: blink,
-                transition: incoming,
-                transitionRootAxis: transitionRootAxis,
+                transition: nil,
+                transitionRootAxis: Self.transitionRootAxis(
+                    named: eyeSelection.clipName
+                ),
                 trackingNamespace: nil
             )
         } else {
@@ -1855,7 +1868,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
 
         return V4SpriteScene(
             sprite: reusableSpriteMesh,
-            eyes: reusableEyeMesh
+            eyes: reusableEyeMesh,
+            usesTransitionCompositing: activeHandoff != nil
         )
     }
 
@@ -2213,7 +2227,11 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             slot: slot,
             buffers: &eyeVertexBuffers
         )
-        return V4GPUScene(sprite: sprite, eyes: eyes)
+        return V4GPUScene(
+            sprite: sprite,
+            eyes: eyes,
+            usesTransitionCompositing: scene.usesTransitionCompositing
+        )
     }
 
     private static func upload<Vertex>(
@@ -2243,9 +2261,14 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
 
     private func encodeSprite(
         _ mesh: V4GPUMesh,
+        transitionCompositing: Bool,
         with encoder: MTLRenderCommandEncoder
     ) {
-        encoder.setRenderPipelineState(texturePipeline)
+        encoder.setRenderPipelineState(
+            transitionCompositing
+                ? transitionTexturePipeline
+                : texturePipeline
+        )
         encoder.setFragmentTexture(spriteTexture, index: 0)
         encoder.setVertexBuffer(mesh.buffer, offset: 0, index: 0)
         encoder.drawPrimitives(
@@ -2326,7 +2349,11 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: pass) else {
             return .failure("unable to create the capture render encoder")
         }
-        encodeSprite(scene.sprite, with: encoder)
+        encodeSprite(
+            scene.sprite,
+            transitionCompositing: scene.usesTransitionCompositing,
+            with: encoder
+        )
         if let eyes = scene.eyes {
             encodeEyes(eyes, with: encoder)
         }
@@ -2579,7 +2606,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         library: MTLLibrary,
         vertex: String,
         fragment: String,
-        sampleCount: Int
+        sampleCount: Int,
+        blendMode: V4PipelineBlendMode = .sourceOver
     ) -> MTLRenderPipelineState {
         let descriptor = MTLRenderPipelineDescriptor()
         descriptor.vertexFunction = library.makeFunction(name: vertex)
@@ -2589,10 +2617,23 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         descriptor.colorAttachments[0].isBlendingEnabled = true
         descriptor.colorAttachments[0].rgbBlendOperation = .add
         descriptor.colorAttachments[0].alphaBlendOperation = .add
-        descriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
-        descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-        descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        switch blendMode {
+        case .sourceOver:
+            descriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
+            descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
+            descriptor.colorAttachments[0].destinationRGBBlendFactor =
+                .oneMinusSourceAlpha
+            descriptor.colorAttachments[0].destinationAlphaBlendFactor =
+                .oneMinusSourceAlpha
+        case .additivePremultiplied:
+            // Outgoing and incoming tissue carry complementary visibility.
+            // Adding premultiplied samples gives C_old*(1-p)+C_new*p and an
+            // opacity of one where both authored silhouettes overlap.
+            descriptor.colorAttachments[0].sourceRGBBlendFactor = .one
+            descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
+            descriptor.colorAttachments[0].destinationRGBBlendFactor = .one
+            descriptor.colorAttachments[0].destinationAlphaBlendFactor = .one
+        }
         do {
             return try device.makeRenderPipelineState(descriptor: descriptor)
         } catch {
@@ -2640,6 +2681,21 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         float4 color = spriteTexture.sample(spriteSampler, in.uv);
         color.a *= in.alpha;
         return color;
+    }
+
+    fragment float4 fullSpritePremultipliedFragment(
+        FullSpriteOut in [[stage_in]],
+        texture2d<float> spriteTexture [[texture(0)]]
+    ) {
+        constexpr sampler spriteSampler(
+            mag_filter::linear,
+            min_filter::linear,
+            mip_filter::linear,
+            address::clamp_to_edge
+        );
+        float4 color = spriteTexture.sample(spriteSampler, in.uv);
+        float alpha = color.a * in.alpha;
+        return float4(color.rgb * alpha, alpha);
     }
 
     struct FullColorVertex {
@@ -2908,11 +2964,18 @@ private enum V4SpriteHandoffKind: Equatable {
 private struct V4SpriteScene {
     let sprite: FullSpriteMesh
     let eyes: FullColorMesh
+    let usesTransitionCompositing: Bool
 }
 
 private struct V4GPUScene {
     let sprite: V4GPUMesh
     let eyes: V4GPUMesh?
+    let usesTransitionCompositing: Bool
+}
+
+private enum V4PipelineBlendMode {
+    case sourceOver
+    case additivePremultiplied
 }
 
 private struct V4GPUMesh {

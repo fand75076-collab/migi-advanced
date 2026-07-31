@@ -313,6 +313,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureDemoFromArguments() {
         let arguments = CommandLine.arguments.dropFirst()
+        if let durationArgument = arguments.first(where: {
+            $0.hasPrefix("--qa-demo-state-duration=")
+        }),
+           let duration = Double(
+               durationArgument.dropFirst("--qa-demo-state-duration=".count)
+           )
+        {
+            overlayController?.setQADemoStateDuration(duration)
+        }
+
         if let clipArgument = arguments.first(where: { $0.hasPrefix("--qa-clip=") }) {
             let clipName = String(clipArgument.dropFirst("--qa-clip=".count))
             overlayController?.setQAClip(clipName)

@@ -1037,6 +1037,44 @@ final class MigiBehaviorControllerTests: XCTestCase {
         )
     }
 
+    func testTransitionLayersRemainComplementaryForPremultipliedCompositing() {
+        let tuning = MigiOrganicMotionTuning.preset(
+            for: "fine-motor",
+            containsProp: false
+        )
+        for progress in stride(from: 0.0, through: 1.0, by: 0.1) {
+            let incoming = MigiTissueTransition(
+                progress: progress,
+                role: .incoming,
+                tuning: tuning
+            )
+            let outgoing = MigiTissueTransition(
+                progress: progress,
+                role: .outgoing,
+                tuning: tuning
+            )
+            for rootDistance in stride(from: 0.0, through: 1.0, by: 0.1) {
+                for rigidity in [CGFloat(0), 0.5, 1] {
+                    let incomingAlpha = incoming.visibility(
+                        rootDistance: rootDistance,
+                        displayX: 0.43,
+                        rigidity: rigidity
+                    )
+                    let outgoingAlpha = outgoing.visibility(
+                        rootDistance: rootDistance,
+                        displayX: 0.43,
+                        rigidity: rigidity
+                    )
+                    XCTAssertEqual(
+                        incomingAlpha + outgoingAlpha,
+                        1,
+                        accuracy: 0.000_001
+                    )
+                }
+            }
+        }
+    }
+
     func testMultipleActiveAgentsTriggerOneShortPeerSignalEvaluation() {
         let controller = MigiBehaviorController(seed: 48)
         let peers: Set<MonitoredAgent> = [.codex, .grok]
@@ -1950,18 +1988,45 @@ final class MigiBehaviorControllerTests: XCTestCase {
         XCTAssertEqual(tapped.prop, .none)
 
         let finalAuthoredFrame = controller.update(
-            time: tapTime + 1.03,
+            time: tapTime + 1.39,
             deltaTime: 0.25,
             availableWidth: 500
         )
         XCTAssertEqual(finalAuthoredFrame.microAction, .lookAround)
 
         let completed = controller.update(
-            time: tapTime + 1.05,
+            time: tapTime + 1.41,
             deltaTime: 0.02,
             availableWidth: 500
         )
         XCTAssertNotEqual(completed.microAction, .lookAround)
+    }
+
+    func testAnchoredWorkAndTransformationPosesKeepThePanelOriginStable() {
+        let cases: [(CodexActivity, CodexToolActionHint)] = [
+            (.thinking, .none),
+            (.tool, .read),
+            (.tool, .write),
+            (.waiting, .none),
+            (.review, .none),
+        ]
+
+        for (index, item) in cases.enumerated() {
+            let controller = MigiBehaviorController(seed: UInt64(390 + index))
+            controller.ingest(
+                snapshot(item.0, toolActionHint: item.1)
+            )
+            for time in stride(from: 10.0, through: 12.0, by: 0.1) {
+                let frame = controller.update(
+                    time: time,
+                    deltaTime: 0.1,
+                    availableWidth: 500
+                )
+                XCTAssertEqual(frame.scoutPhase, .anchored)
+                XCTAssertEqual(frame.worldOffset.x, 0, accuracy: 0.001)
+                XCTAssertEqual(frame.worldOffset.y, 0, accuracy: 0.001)
+            }
+        }
     }
 
     func testTapDuringSleepWakeOrCredibleThreatIsDiscarded() {
@@ -2077,7 +2142,7 @@ final class MigiBehaviorControllerTests: XCTestCase {
         )
 
         let finalPause = controller.update(
-            time: tapTime + 1.03,
+            time: tapTime + 1.39,
             deltaTime: 0.25,
             availableWidth: 620
         )
@@ -2095,7 +2160,7 @@ final class MigiBehaviorControllerTests: XCTestCase {
         )
 
         var returning = controller.update(
-            time: tapTime + 1.05,
+            time: tapTime + 1.41,
             deltaTime: 0.02,
             availableWidth: 620
         )
@@ -2115,7 +2180,7 @@ final class MigiBehaviorControllerTests: XCTestCase {
 
         var previousX = returning.worldOffset.x
         var returnedToAnchor = false
-        time = tapTime + 1.05
+        time = tapTime + 1.41
         for _ in 0..<200 where !returnedToAnchor {
             time += 0.1
             returning = controller.update(

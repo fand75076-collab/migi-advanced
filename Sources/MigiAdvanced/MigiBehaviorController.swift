@@ -50,6 +50,11 @@ public enum MigiInteraction: Equatable, Sendable {
 }
 
 enum MigiAnimationTiming {
+    /// A semantic pose replacement is deliberately much slower than an authored
+    /// animation cell advance. Interactive clips include this lead-in so their
+    /// complete authored motion remains visible after the new pose has arrived.
+    static let semanticHandoffDuration: TimeInterval = 0.36
+
     /// Keeps the final wake pose visible while the renderer dissolves into the
     /// work pose. Tool latches include this interval so their canonical
     /// gesture still receives its complete opaque hold afterward.
@@ -163,7 +168,8 @@ public final class MigiBehaviorController {
     private static let peerSignalEvaluationCooldown: TimeInterval = 12
     private static let recoveryCareDuration: TimeInterval = 0.9 * 4
     private static let interactionCooldown: TimeInterval = 8
-    private static let interactionLookAroundDuration: TimeInterval = 1.04
+    private static let interactionLookAroundDuration: TimeInterval =
+        MigiAnimationTiming.semanticHandoffDuration + 1.04
     private static let idleActionSpecs: [MigiIdleActionSpec] = [
         .init(
             action: .read,
@@ -1397,13 +1403,11 @@ public final class MigiBehaviorController {
 
         if prop != .none {
             // Reading, typing, and checking a phone are anchored attention
-            // states. Letting their rigid props drift across the desktop makes
-            // focused work read as locomotion.
+            // states. Their organic breathing already lives inside the Metal
+            // mesh; moving the NSPanel by sub-pixel amounts makes its drawable
+            // alternate between backing pixels and reads as a shimmer.
             anchorDetachedScout(at: time)
-            return CGPoint(
-                x: 0,
-                y: CGFloat(sin(time * 1.15)) * 0.28
-            )
+            return .zero
         }
 
         // Canonical transformations read best when Migi anchors its base and
@@ -1429,10 +1433,7 @@ public final class MigiBehaviorController {
             || (activity == .idle && time < idleSettleUntil)
         {
             anchorDetachedScout(at: time)
-            return CGPoint(
-                x: 0,
-                y: CGFloat(sin(time * 1.15)) * 0.28
-            )
+            return .zero
         }
 
         // The autonomous walking body is a rare, short-range detached scout,
@@ -1440,10 +1441,7 @@ public final class MigiBehaviorController {
         // forces it back to the right-hand anchor.
         guard activity == .idle else {
             anchorDetachedScout(at: time)
-            return CGPoint(
-                x: 0,
-                y: CGFloat(sin(time * 1.6)) * 0.18
-            )
+            return .zero
         }
 
         if scoutPhase == .anchored, time >= nextScoutAt {

@@ -77,6 +77,10 @@ final class MigiOverlayController {
         metalView.setDemoMode(enabled, fixedActivity: fixedActivity)
     }
 
+    func setQADemoStateDuration(_ duration: TimeInterval) {
+        metalView.setQADemoStateDuration(duration)
+    }
+
     func requestQACapture(to url: URL) {
         metalView.requestQACapture(to: url)
     }
