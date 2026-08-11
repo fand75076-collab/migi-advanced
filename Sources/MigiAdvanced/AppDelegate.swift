@@ -5,6 +5,7 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let failureNotificationsPreferenceKey = "failureNotificationsEnabled"
     private static let monitoringModePreferenceKey = "agentMonitoringMode"
+    private static let speechBubblesPreferenceKey = "speechBubblesEnabled"
 
     private let stateMonitor = CodexStateMonitor()
     private var overlayController: MigiOverlayController?
@@ -12,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var stateMenuItem: NSMenuItem?
     private var demoMenuItem: NSMenuItem?
     private var monitoringModeMenuItems: [AgentMonitoringMode: NSMenuItem] = [:]
+    private var speechBubblesMenuItem: NSMenuItem?
     private var failureNotificationsMenuItem: NSMenuItem?
     private var launchAtLoginMenuItem: NSMenuItem?
     private var hideObserver: NSObjectProtocol?
@@ -24,12 +26,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     private var previousLiveActivity: CodexActivity = .idle
     private var lastFailureNotificationAt = Date.distantPast
+    private var suppressedSpeechRevision: UInt64?
     private var latestLiveSnapshot = CodexActivitySnapshot(
         activity: .idle,
         detail: "Idle",
         observedAt: Date(),
         sourcePath: nil
     )
+
+    private var speechBubblesEnabled: Bool {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.speechBubblesPreferenceKey) == nil {
+            return true
+        }
+        return defaults.bool(forKey: Self.speechBubblesPreferenceKey)
+    }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         DistributedNotificationCenter.default().addObserver(
@@ -61,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.handleFailureTransition(snapshot)
             self.latestLiveSnapshot = snapshot
             self.overlayController?.ingest(snapshot)
+            self.routeSpeechBubble(snapshot)
             if self.overlayController?.isDemoModeEnabled == false {
                 self.refreshStateMenu(for: snapshot)
             }
@@ -166,6 +178,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(monitoringMode)
         refreshMonitoringModeMenu()
 
+        let speechBubbles = NSMenuItem(
+            title: "显示 Agent 回复气泡",
+            action: #selector(toggleSpeechBubbles(_:)),
+            keyEquivalent: ""
+        )
+        speechBubbles.target = self
+        speechBubbles.toolTip = "把当前感知来源已经写入本机会话日志的回复显示在桌面；不会联网。"
+        menu.addItem(speechBubbles)
+        speechBubblesMenuItem = speechBubbles
+        refreshSpeechBubblesMenu()
+
         let failureNotifications = NSMenuItem(
             title: "异常时通知",
             action: #selector(toggleFailureNotifications(_:)),
@@ -235,6 +258,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         selectedMonitoringMode = mode
+        suppressedSpeechRevision = latestLiveSnapshot.spokenRevision
+        overlayController?.clearSpeech(immediate: true)
         UserDefaults.standard.set(
             mode.rawValue,
             forKey: Self.monitoringModePreferenceKey
@@ -245,6 +270,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if overlayController?.isDemoModeEnabled == false {
             stateMenuItem?.title = "\(mode.menuLabel)：正在感知"
         }
+    }
+
+    @objc private func toggleSpeechBubbles(_ sender: NSMenuItem) {
+        let enabled = !speechBubblesEnabled
+        UserDefaults.standard.set(enabled, forKey: Self.speechBubblesPreferenceKey)
+        if !enabled {
+            suppressedSpeechRevision = latestLiveSnapshot.spokenRevision
+            overlayController?.clearSpeech(immediate: true)
+        }
+        // Enabling deliberately does not replay the last snapshot. A new
+        // utterance revision will be shown the next time the monitor sees one.
+        refreshSpeechBubblesMenu()
     }
 
     @objc private func toggleFailureNotifications(_ sender: NSMenuItem) {
@@ -366,6 +403,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             stateMenuItem?.title = "Codex：状态演示"
         }
 
+        if let transitionArgument = arguments.first(where: {
+            $0.hasPrefix("--qa-agent-transition=")
+        }) {
+            let rawValue = String(
+                transitionArgument.dropFirst("--qa-agent-transition=".count)
+            )
+            overlayController?.setQAAgentTransition(rawValue)
+            demoMenuItem?.state = .on
+            stateMenuItem?.title = "Agent 交接演示：\(rawValue)"
+        }
+
         if let captureArgument = arguments.first(where: { $0.hasPrefix("--qa-capture=") }) {
             let path = String(captureArgument.dropFirst("--qa-capture=".count))
             if path.hasPrefix("/") {
@@ -424,6 +472,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Echo an agent's reply as a speech bubble, but only for the agent the user
+    /// is currently monitoring. In "all" mode every sourced turn is echoed; in
+    /// a single-agent mode only that agent's replies show.
+    private func routeSpeechBubble(_ snapshot: CodexActivitySnapshot) {
+        guard speechBubblesEnabled else {
+            if let revision = snapshot.spokenRevision {
+                suppressedSpeechRevision = revision
+            }
+            overlayController?.clearSpeech(immediate: true)
+            return
+        }
+
+        let mode = selectedMonitoringMode
+        let source = snapshot.spokenAgent
+        let agentMatches: Bool
+        switch mode {
+        case .all:
+            agentMatches = true
+        case .codex:
+            agentMatches = source == .codex
+        case .grok:
+            agentMatches = source == .grok
+        case .zcode:
+            agentMatches = source == .zcode
+        }
+        guard agentMatches,
+              let text = snapshot.spokenText,
+              let revision = snapshot.spokenRevision
+        else {
+            overlayController?.showSpeech(nil, revision: nil)
+            return
+        }
+        guard revision != suppressedSpeechRevision else { return }
+        overlayController?.showSpeech(text, revision: revision)
+    }
+
     private func handleFailureTransition(_ snapshot: CodexActivitySnapshot) {
         defer {
             previousLiveActivity = snapshot.activity
@@ -472,6 +556,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for (mode, item) in monitoringModeMenuItems {
             item.state = mode == selectedMonitoringMode ? .on : .off
         }
+    }
+
+    private func refreshSpeechBubblesMenu() {
+        speechBubblesMenuItem?.state = speechBubblesEnabled ? .on : .off
     }
 
     private func refreshFailureNotificationsMenu() {

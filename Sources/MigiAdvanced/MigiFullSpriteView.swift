@@ -67,6 +67,9 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private var demoStartTime: TimeInterval?
     private var demoStateDuration: TimeInterval = 8
     private var lastDemoIndex = -1
+    private var qaAgentTransition: MigiQAAgentTransition?
+    private var qaAgentTransitionStartedAt: TimeInterval?
+    private var qaAgentTransitionWasSent = false
     private var latestLiveSnapshot = CodexActivitySnapshot(
         activity: .idle,
         detail: "Idle",
@@ -184,6 +187,9 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     func setDemoMode(_ enabled: Bool, fixedActivity: CodexActivity? = nil) {
         demoMode = enabled
         forcedWakePhase = nil
+        qaAgentTransition = nil
+        qaAgentTransitionStartedAt = nil
+        qaAgentTransitionWasSent = false
         fixedDemoActivity = enabled ? fixedActivity : nil
         demoStartTime = nil
         lastDemoIndex = -1
@@ -248,6 +254,9 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         forcedWakePhase = phase
         guard let phase else { return }
         demoMode = true
+        qaAgentTransition = nil
+        qaAgentTransitionStartedAt = nil
+        qaAgentTransitionWasSent = false
         fixedDemoActivity = nil
         demoStartTime = nil
         lastDemoIndex = -1
@@ -260,6 +269,26 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         let targetActivity: CodexActivity = phase == .deepSleep ? .idle : .thinking
         behavior.force(demoSnapshot(for: targetActivity))
         behavior.forceWakePhaseForQA(phase)
+    }
+
+    func setQAAgentTransition(_ rawValue: String) {
+        guard let transition = MigiQAAgentTransition(rawValue: rawValue) else {
+            fatalError("Invalid Migi QA Agent transition: \(rawValue)")
+        }
+        demoMode = true
+        forcedWakePhase = nil
+        fixedDemoActivity = nil
+        demoStartTime = nil
+        lastDemoIndex = -1
+        qaAgentTransition = transition
+        qaAgentTransitionStartedAt = nil
+        qaAgentTransitionWasSent = false
+        activeClipName = nil
+        lastRequestedMirroring = nil
+        activeTurnPlayback = nil
+        behavior.force(
+            qaAgentTransitionSnapshot(for: transition, afterTransition: false)
+        )
     }
 
     func triggerQAInteraction() {
@@ -515,6 +544,25 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         if forcedWakePhase != nil {
             return
         }
+        if let qaAgentTransition {
+            if qaAgentTransitionStartedAt == nil {
+                qaAgentTransitionStartedAt = time
+            }
+            let elapsed = max(
+                time - (qaAgentTransitionStartedAt ?? time),
+                0
+            )
+            if !qaAgentTransitionWasSent, elapsed >= 0.20 {
+                qaAgentTransitionWasSent = true
+                behavior.ingest(
+                    qaAgentTransitionSnapshot(
+                        for: qaAgentTransition,
+                        afterTransition: true
+                    )
+                )
+            }
+            return
+        }
         let activities: [CodexActivity] = [.idle, .thinking, .tool, .waiting, .review, .failed]
         if demoStartTime == nil {
             demoStartTime = time
@@ -548,6 +596,34 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             detail: "状态演示",
             observedAt: Date(),
             sourcePath: nil
+        )
+    }
+
+    private func qaAgentTransitionSnapshot(
+        for transition: MigiQAAgentTransition,
+        afterTransition: Bool
+    ) -> CodexActivitySnapshot {
+        let sourceAgent: MonitoredAgent
+        let activeAgents: Set<MonitoredAgent>
+        switch transition {
+        case .join:
+            sourceAgent = .codex
+            activeAgents = afterTransition ? [.codex, .grok] : [.codex]
+        case .handoff:
+            sourceAgent = afterTransition ? .grok : .codex
+            activeAgents = [.codex, .grok]
+        case .leave:
+            sourceAgent = .codex
+            activeAgents = afterTransition ? [.codex] : [.codex, .grok]
+        }
+        return CodexActivitySnapshot(
+            activity: .thinking,
+            detail: "Agent transition QA: \(transition.rawValue)",
+            observedAt: Date(),
+            sourcePath: nil,
+            sourceAgent: sourceAgent,
+            monitoringGeneration: 1,
+            activeAgents: activeAgents
         )
     }
 
@@ -761,7 +837,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             target = 30
         } else if frame.isMoving
                     || frame.activity == .failed
-                    || [.rapidNotes, .fineMotor, .organDrift, .logicCount]
+                    || [.rapidNotes, .fineMotor, .organDrift, .logicCount,
+                        .signalSampling, .agentHandoff, .agentTurn]
                         .contains(frame.microAction)
                     || (selection.pointerEyes && gazeIsChasing)
         {
@@ -847,6 +924,22 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         {
             // The authored planted turn owns its own clock. Give its first cell
             // a very short tissue handoff without delaying or skipping the turn.
+            ordinaryHandoff = nil
+            authoredFrameHandoff = V4SpriteHandoff(
+                previous: previous,
+                startedAt: time,
+                duration: Self.authoredFrameHandoffDuration,
+                kind: .authoredFrame
+            )
+        } else if wakeHandoff == nil,
+                  behavior.microAction == .agentTurn,
+                  presentationChanged,
+                  let previous = lastSpriteSelection
+        {
+            // Agent handoff owns an explicit once-through turn clip. Give its
+            // first cell the same short tissue arrival as an automatic planted
+            // turn, but do not spend 0.36 s of its 1.01 s clock in a semantic
+            // transition or bind it to the next work clip's identity.
             ordinaryHandoff = nil
             authoredFrameHandoff = V4SpriteHandoff(
                 previous: previous,
@@ -1029,6 +1122,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 atlas.clips["signal-sampling"] != nil
                     ? "signal-sampling"
                     : "look-around"
+        case .agentHandoff:
+            microActionClip = "look-around"
+        case .agentTurn:
+            microActionClip = frame.facing < 0 ? "turn-left" : "turn-right"
         case .storagePocket:
             microActionClip =
                 atlas.clips["storage-pocket"] != nil
@@ -1079,12 +1176,15 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             case .lookAround:
                 wakeIdentity = "wake-look-around"
             }
+            let identity = frame.microAction == .agentHandoff
+                ? "agent-handoff#\(wakeIdentity)"
+                : "\(microActionClip)#\(wakeIdentity)"
             return selection(
                 named: microActionClip,
                 time: time,
                 mirrored: requestedMirroring,
                 playbackRate: frame.clipPlaybackRate,
-                playbackIdentity: "\(microActionClip)#\(wakeIdentity)"
+                playbackIdentity: identity
             )
         }
 
@@ -2906,6 +3006,12 @@ private struct V4SpriteSelection {
     let pointerEyes: Bool
     let eyeAnchors: [V4EyeAnchor]
     let deformationProfile: V4DeformationProfile
+}
+
+private enum MigiQAAgentTransition: String {
+    case join
+    case handoff
+    case leave
 }
 
 private enum V4TransitionRootAxis: Equatable {

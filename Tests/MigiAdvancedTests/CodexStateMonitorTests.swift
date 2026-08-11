@@ -23,6 +23,9 @@ final class CodexStateMonitorTests: XCTestCase {
         XCTAssertEqual(snapshot.activeAgents, [])
         XCTAssertEqual(snapshot.failureDisposition, .none)
         XCTAssertEqual(snapshot.relationshipProfile, .init())
+        XCTAssertNil(snapshot.spokenText)
+        XCTAssertNil(snapshot.spokenAgent)
+        XCTAssertNil(snapshot.spokenRevision)
         XCTAssertEqual(
             try JSONDecoder().decode(
                 AgentMonitoringMode.self,
@@ -570,6 +573,426 @@ final class CodexStateMonitorTests: XCTestCase {
         XCTAssertEqual(snapshot.activity, .tool)
         XCTAssertEqual(snapshot.toolActionHint, .read)
         XCTAssertEqual(snapshot.sourceAgent, .zcode)
+    }
+
+    func testCodexFinalAnswerSurvivesTaskCompleteInSamePollWithoutDuplication() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let now = Date()
+        let turnID = "codex-final-turn"
+        let finalText = "A complete Codex fixture answer."
+
+        try fixture.write(
+            joined([
+                record(
+                    type: "task_started",
+                    at: now.addingTimeInterval(-1),
+                    fields: ["turn_id": turnID]
+                ),
+                record(
+                    type: "agent_message",
+                    at: now.addingTimeInterval(-0.3),
+                    fields: [
+                        "message": finalText,
+                        "phase": "final_answer",
+                    ]
+                ),
+                responseItemMessageRecord(
+                    text: finalText,
+                    phase: "final_answer",
+                    turnID: turnID,
+                    at: now.addingTimeInterval(-0.2)
+                ),
+                record(
+                    type: "task_complete",
+                    at: now.addingTimeInterval(-0.1),
+                    fields: [
+                        "turn_id": turnID,
+                        "last_agent_message": finalText,
+                    ]
+                ),
+            ])
+        )
+
+        let snapshot = fixture.monitor.pollSynchronously(now: now)
+        XCTAssertEqual(snapshot.activity, .review)
+        XCTAssertEqual(snapshot.sourceAgent, .codex)
+        XCTAssertEqual(snapshot.spokenText, finalText)
+        XCTAssertEqual(snapshot.spokenAgent, .codex)
+        XCTAssertEqual(snapshot.spokenRevision, 1)
+    }
+
+    func testLateTaskCompleteFromOlderTurnDoesNotOverrideNewerActiveTurn() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let now = Date()
+        let currentText = "Turn B is still actively working."
+
+        try fixture.write(
+            joined([
+                record(
+                    type: "task_started",
+                    at: now.addingTimeInterval(-1.0),
+                    fields: ["turn_id": "turn-a"]
+                ),
+                record(
+                    type: "task_started",
+                    at: now.addingTimeInterval(-0.8),
+                    fields: ["turn_id": "turn-b"]
+                ),
+                record(
+                    type: "agent_message",
+                    at: now.addingTimeInterval(-0.6),
+                    fields: [
+                        "message": currentText,
+                        "phase": "commentary",
+                    ]
+                ),
+                record(
+                    type: "task_complete",
+                    at: now.addingTimeInterval(-0.4),
+                    fields: [
+                        "turn_id": "turn-a",
+                        "last_agent_message": "Late answer from obsolete turn A.",
+                    ]
+                ),
+            ])
+        )
+
+        let snapshot = fixture.monitor.pollSynchronously(now: now)
+        XCTAssertEqual(snapshot.activity, .thinking)
+        XCTAssertEqual(snapshot.sourceAgent, .codex)
+        XCTAssertTrue(snapshot.activeAgents.contains(.codex))
+        XCTAssertEqual(snapshot.spokenText, currentText)
+        XCTAssertEqual(snapshot.spokenAgent, .codex)
+    }
+
+    func testNewerLowerOriginCommentaryWinsAndOlderRecordCannotFlowBackward() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let now = Date()
+        let turnID = "commentary-order-turn"
+        let newestText = "Newer response-item commentary."
+
+        try fixture.write(
+            joined([
+                record(
+                    type: "task_started",
+                    at: now.addingTimeInterval(-1.2),
+                    fields: ["turn_id": turnID]
+                ),
+                record(
+                    type: "agent_message",
+                    at: now.addingTimeInterval(-0.9),
+                    fields: [
+                        "message": "Earlier event-message commentary.",
+                        "phase": "commentary",
+                    ]
+                ),
+                responseItemMessageRecord(
+                    text: newestText,
+                    phase: "commentary",
+                    turnID: turnID,
+                    at: now.addingTimeInterval(-0.5)
+                ),
+                record(
+                    type: "agent_message",
+                    at: now.addingTimeInterval(-1.0),
+                    fields: [
+                        "message": "Older record appended later in the file.",
+                        "phase": "commentary",
+                    ]
+                ),
+            ])
+        )
+
+        let snapshot = fixture.monitor.pollSynchronously(now: now)
+        XCTAssertEqual(snapshot.activity, .thinking)
+        XCTAssertEqual(snapshot.sourceAgent, .codex)
+        XCTAssertEqual(snapshot.spokenText, newestText)
+        XCTAssertEqual(snapshot.spokenAgent, .codex)
+    }
+
+    func testLongRunningCodexTurnUsesLastSpokenTextTimeForFreshness() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let now = Date()
+        let finalText = "Fresh text from a long-running Codex turn."
+
+        try fixture.write(
+            record(
+                type: "task_started",
+                at: now.addingTimeInterval(-120),
+                fields: ["turn_id": "long-running-turn"]
+            )
+        )
+        var snapshot = fixture.monitor.pollSynchronously(now: now)
+        XCTAssertNil(snapshot.spokenText)
+
+        try fixture.append(
+            record(
+                type: "agent_message",
+                at: now.addingTimeInterval(0.1),
+                fields: [
+                    "message": finalText,
+                    "phase": "final_answer",
+                ]
+            )
+        )
+        snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(0.2)
+        )
+        XCTAssertEqual(snapshot.spokenText, finalText)
+        XCTAssertEqual(snapshot.spokenAgent, .codex)
+        XCTAssertNotNil(snapshot.spokenRevision)
+
+        snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(8)
+        )
+        XCTAssertEqual(snapshot.spokenText, finalText)
+
+        snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(8.2)
+        )
+        XCTAssertNil(snapshot.spokenText)
+        XCTAssertNil(snapshot.spokenAgent)
+        XCTAssertNil(snapshot.spokenRevision)
+    }
+
+    func testGrokReplySurvivesTurnCompletedInSamePoll() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        fixture.monitor.setMonitoringMode(.grok)
+        let now = Date()
+
+        _ = fixture.monitor.pollSynchronously(now: now)
+        try fixture.append(
+            joined([
+                grokRecord(
+                    updateType: "agent_message_chunk",
+                    at: now.addingTimeInterval(0.1),
+                    fields: ["content": ["type": "text", "text": "Grok "]]
+                ),
+                grokRecord(
+                    updateType: "agent_message_chunk",
+                    at: now.addingTimeInterval(0.2),
+                    fields: ["content": ["type": "text", "text": "answer"]]
+                ),
+                grokRecord(
+                    updateType: "turn_completed",
+                    at: now.addingTimeInterval(0.3),
+                    fields: [
+                        "prompt_id": "grok-prompt",
+                        "stop_reason": "end_turn",
+                    ]
+                ),
+            ]),
+            for: .grok
+        )
+
+        var snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(0.4)
+        )
+        XCTAssertEqual(snapshot.activity, .review)
+        XCTAssertEqual(snapshot.sourceAgent, .grok)
+        XCTAssertEqual(snapshot.spokenText, "Grok answer")
+        XCTAssertEqual(snapshot.spokenAgent, .grok)
+        XCTAssertEqual(snapshot.spokenRevision, 2)
+
+        snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(6.2)
+        )
+        XCTAssertEqual(snapshot.spokenText, "Grok answer")
+
+        snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(6.4)
+        )
+        XCTAssertNil(snapshot.spokenText)
+        XCTAssertNil(snapshot.spokenAgent)
+        XCTAssertNil(snapshot.spokenRevision)
+    }
+
+    func testZCodeNewTurnReplacesPreviousTurnSpeech() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        fixture.monitor.setMonitoringMode(.zcode)
+        let now = Date()
+
+        _ = fixture.monitor.pollSynchronously(now: now)
+        try fixture.append(
+            zcodeRecord(
+                startedAt: now.addingTimeInterval(0.1),
+                completedAt: now.addingTimeInterval(0.2),
+                finishReason: "stop",
+                turnID: "zcode-turn-one",
+                text: "First ZCode answer"
+            ),
+            for: .zcode
+        )
+        var snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(0.3)
+        )
+        let firstRevision = try XCTUnwrap(snapshot.spokenRevision)
+        XCTAssertEqual(snapshot.spokenText, "First ZCode answer")
+        XCTAssertEqual(snapshot.spokenAgent, .zcode)
+
+        try fixture.append(
+            zcodeRecord(
+                startedAt: now.addingTimeInterval(0.4),
+                completedAt: now.addingTimeInterval(0.5),
+                finishReason: "stop",
+                turnID: "zcode-turn-two",
+                text: "Second ZCode answer"
+            ),
+            for: .zcode
+        )
+        snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(0.6)
+        )
+        XCTAssertEqual(snapshot.spokenText, "Second ZCode answer")
+        XCTAssertEqual(snapshot.spokenAgent, .zcode)
+        XCTAssertGreaterThan(try XCTUnwrap(snapshot.spokenRevision), firstRevision)
+    }
+
+    func testSpokenTextBufferIsBoundedAndKeepsNewestText() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        fixture.monitor.setMonitoringMode(.grok)
+        let now = Date()
+        let discardedPrefix = "discarded-prefix-"
+        let newestSuffix = "-newest-suffix"
+        let oversizedChunk = discardedPrefix
+            + String(
+                repeating: "a",
+                count: CodexStateMonitor.maximumSpokenTextCharacters
+            )
+
+        _ = fixture.monitor.pollSynchronously(now: now)
+        try fixture.append(
+            joined([
+                grokRecord(
+                    updateType: "agent_message_chunk",
+                    at: now.addingTimeInterval(0.1),
+                    fields: [
+                        "content": ["type": "text", "text": oversizedChunk],
+                    ]
+                ),
+                grokRecord(
+                    updateType: "agent_message_chunk",
+                    at: now.addingTimeInterval(0.2),
+                    fields: [
+                        "content": ["type": "text", "text": newestSuffix],
+                    ]
+                ),
+            ]),
+            for: .grok
+        )
+
+        let snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(0.3)
+        )
+        let spokenText = try XCTUnwrap(snapshot.spokenText)
+        XCTAssertEqual(
+            spokenText.count,
+            CodexStateMonitor.maximumSpokenTextCharacters
+        )
+        XCTAssertFalse(spokenText.hasPrefix(discardedPrefix))
+        XCTAssertTrue(spokenText.hasSuffix(newestSuffix))
+        XCTAssertEqual(snapshot.spokenAgent, .grok)
+        XCTAssertEqual(snapshot.spokenRevision, 2)
+    }
+
+    func testMonitoringModeSwitchDropsDisabledAgentSpeech() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let now = Date()
+
+        _ = fixture.monitor.pollSynchronously(now: now)
+        try fixture.append(
+            joined([
+                record(
+                    type: "task_started",
+                    at: now.addingTimeInterval(0.1),
+                    fields: ["turn_id": "mode-switch-turn"]
+                ),
+                record(
+                    type: "agent_message",
+                    at: now.addingTimeInterval(0.2),
+                    fields: [
+                        "message": "Codex mode speech",
+                        "phase": "final_answer",
+                    ]
+                ),
+            ])
+        )
+        var snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(0.3)
+        )
+        XCTAssertEqual(snapshot.spokenText, "Codex mode speech")
+        XCTAssertEqual(snapshot.spokenAgent, .codex)
+        let codexRevision = try XCTUnwrap(snapshot.spokenRevision)
+
+        let grokGeneration = fixture.monitor.setMonitoringMode(.grok)
+        snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(0.4)
+        )
+        XCTAssertEqual(snapshot.monitoringGeneration, grokGeneration)
+        XCTAssertNil(snapshot.spokenText)
+        XCTAssertNil(snapshot.spokenAgent)
+        XCTAssertNil(snapshot.spokenRevision)
+
+        try fixture.append(
+            grokRecord(
+                updateType: "agent_message_chunk",
+                at: now.addingTimeInterval(0.5),
+                fields: [
+                    "content": ["type": "text", "text": "Grok mode speech"],
+                ]
+            ),
+            for: .grok
+        )
+        snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(0.6)
+        )
+        XCTAssertEqual(snapshot.spokenText, "Grok mode speech")
+        XCTAssertEqual(snapshot.spokenAgent, .grok)
+        XCTAssertGreaterThan(try XCTUnwrap(snapshot.spokenRevision), codexRevision)
+    }
+
+    func testAllModeSpeechIsIndependentFromActivityWinner() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        fixture.monitor.setMonitoringMode(.all)
+        let now = Date()
+
+        _ = fixture.monitor.pollSynchronously(now: now)
+        try fixture.append(
+            record(
+                type: "task_failed",
+                at: now.addingTimeInterval(0.3),
+                fields: ["status": "failed"]
+            ),
+            for: .codex
+        )
+        try fixture.append(
+            grokRecord(
+                updateType: "agent_message_chunk",
+                at: now.addingTimeInterval(0.2),
+                fields: [
+                    "content": ["type": "text", "text": "Independent Grok speech"],
+                ]
+            ),
+            for: .grok
+        )
+
+        let snapshot = fixture.monitor.pollSynchronously(
+            now: now.addingTimeInterval(0.4)
+        )
+        XCTAssertEqual(snapshot.activity, .failed)
+        XCTAssertEqual(snapshot.sourceAgent, .codex)
+        XCTAssertEqual(snapshot.spokenText, "Independent Grok speech")
+        XCTAssertEqual(snapshot.spokenAgent, .grok)
+        XCTAssertNotNil(snapshot.spokenRevision)
     }
 
     func testGrokRealShapeChunksCompletionAndFailure() throws {
@@ -1561,6 +1984,34 @@ final class CodexStateMonitorTests: XCTestCase {
         return data
     }
 
+    private func responseItemMessageRecord(
+        text: String,
+        phase: String,
+        turnID: String,
+        at date: Date
+    ) -> Data {
+        let envelope: [String: Any] = [
+            "timestamp": Self.timestampFormatter.string(from: date),
+            "type": "response_item",
+            "payload": [
+                "type": "message",
+                "id": "response-item-fixture",
+                "role": "assistant",
+                "phase": phase,
+                "content": [[
+                    "type": "output_text",
+                    "text": text,
+                ]],
+                "internal_chat_message_metadata_passthrough": [
+                    "turn_id": turnID,
+                ],
+            ],
+        ]
+        var data = try! JSONSerialization.data(withJSONObject: envelope)
+        data.append(0x0A)
+        return data
+    }
+
     private func grokRecord(
         updateType: String,
         at date: Date,
@@ -1585,13 +2036,15 @@ final class CodexStateMonitorTests: XCTestCase {
         startedAt: Date,
         completedAt: Date,
         finishReason: String,
+        turnID: String = "zcode-fixture-turn",
+        text: String = "",
         toolCalls: [[String: Any]] = [],
         error: String? = nil
     ) -> Data {
         var response: [String: Any] = [
             "finishReason": finishReason,
             "modelId": "glm-5.2",
-            "text": "",
+            "text": text,
             "toolCalls": toolCalls,
             "usage": [
                 "inputTokens": 10,
@@ -1602,6 +2055,7 @@ final class CodexStateMonitorTests: XCTestCase {
         var envelope: [String: Any] = [
             "type": "model_io",
             "requestId": "zcode-fixture-request",
+            "turnId": turnID,
             "startedAt": Self.timestampFormatter.string(from: startedAt),
             "completedAt": Self.timestampFormatter.string(from: completedAt),
             "durationMs": Int(completedAt.timeIntervalSince(startedAt) * 1_000),

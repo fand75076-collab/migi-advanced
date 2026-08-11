@@ -1075,7 +1075,7 @@ final class MigiBehaviorControllerTests: XCTestCase {
         }
     }
 
-    func testMultipleActiveAgentsTriggerOneShortPeerSignalEvaluation() {
+    func testMultipleActiveAgentsCompleteTheFullPeerSignalEvaluation() {
         let controller = MigiBehaviorController(seed: 48)
         let peers: Set<MonitoredAgent> = [.codex, .grok]
         controller.ingest(snapshot(.thinking, activeAgents: peers))
@@ -1091,7 +1091,7 @@ final class MigiBehaviorControllerTests: XCTestCase {
 
         XCTAssertEqual(
             controller.update(
-                time: 101.11,
+                time: 102.93,
                 deltaTime: 0.25,
                 availableWidth: 500
             ).microAction,
@@ -1099,7 +1099,7 @@ final class MigiBehaviorControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             controller.update(
-                time: 101.13,
+                time: 102.95,
                 deltaTime: 0.02,
                 availableWidth: 500
             ).microAction,
@@ -1179,7 +1179,7 @@ final class MigiBehaviorControllerTests: XCTestCase {
         XCTAssertEqual(queuedScan.prop, .none)
         XCTAssertEqual(
             controller.update(
-                time: 103.16,
+                time: 104.98,
                 deltaTime: 0.25,
                 availableWidth: 500
             ).microAction,
@@ -1187,12 +1187,691 @@ final class MigiBehaviorControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             controller.update(
-                time: 103.18,
+                time: 105,
                 deltaTime: 0.02,
                 availableWidth: 500
             ).microAction,
             .type
         )
+    }
+
+    func testLiveSourceHandoffCompletesThenFlipsFacingOnce() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 481, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                activeAgents: peers
+            )
+        )
+        let first = controller.update(
+            time: 100,
+            deltaTime: 0,
+            availableWidth: 500
+        )
+        XCTAssertEqual(first.microAction, .agentHandoff)
+        XCTAssertEqual(first.facing, -1)
+        XCTAssertFalse(first.isMoving)
+
+        let finalLook = controller.update(
+            time: 101.39,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertEqual(finalLook.microAction, .agentHandoff)
+        XCTAssertEqual(finalLook.facing, -1)
+
+        let turned = controller.update(
+            time: 101.41,
+            deltaTime: 0.02,
+            availableWidth: 500
+        )
+        XCTAssertEqual(turned.microAction, .agentTurn)
+        XCTAssertEqual(turned.facing, 1)
+
+        let settled = controller.update(
+            time: 102.43,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertEqual(settled.microAction, .type)
+        XCTAssertEqual(settled.facing, 1)
+    }
+
+    func testDuplicateSourceSnapshotDoesNotRestartAgentHandoff() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 482, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+        let grok = snapshot(
+            .thinking,
+            sourceAgent: .grok,
+            activeAgents: peers
+        )
+
+        controller.ingest(grok)
+        XCTAssertEqual(
+            controller.update(
+                time: 100,
+                deltaTime: 0,
+                availableWidth: 500
+            ).microAction,
+            .agentHandoff
+        )
+        controller.ingest(grok)
+        XCTAssertEqual(
+            controller.update(
+                time: 100.8,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .agentHandoff
+        )
+
+        let completed = controller.update(
+            time: 101.41,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertEqual(completed.microAction, .agentTurn)
+        XCTAssertEqual(completed.facing, 1)
+        XCTAssertEqual(
+            controller.update(
+                time: 102.43,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .type
+        )
+    }
+
+    func testAgentTurnSurvivesReviewAndDefersAReadGesture() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 4821, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                activeAgents: peers
+            )
+        )
+        _ = controller.update(time: 100, deltaTime: 0, availableWidth: 500)
+
+        let turn = controller.update(
+            time: 101.41,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertEqual(turn.microAction, .agentTurn)
+        XCTAssertEqual(turn.facing, 1)
+
+        controller.ingest(
+            snapshot(
+                .review,
+                sourceAgent: .grok,
+                activeAgents: peers
+            )
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 101.7,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .agentTurn
+        )
+
+        controller.ingest(
+            snapshot(
+                .tool,
+                toolActionHint: .read,
+                sourceAgent: .grok,
+                activeAgents: peers
+            )
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 101.8,
+                deltaTime: 0.1,
+                availableWidth: 500
+            ).microAction,
+            .agentTurn
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 102.43,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .read
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 104.21,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .read
+        )
+    }
+
+    func testRapidSourceSwitchBackDoesNotFlipTowardStaleAgent() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 483, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                activeAgents: peers
+            )
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 100,
+                deltaTime: 0,
+                availableWidth: 500
+            ).microAction,
+            .agentHandoff
+        )
+
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 100.5,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .agentHandoff
+        )
+
+        let settled = controller.update(
+            time: 101.41,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertEqual(settled.microAction, .type)
+        XCTAssertEqual(settled.facing, -1)
+    }
+
+    func testSourceReversalOnHandoffExpiryFrameDoesNotTurnTowardStaleAgent() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 4831, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                activeAgents: peers
+            )
+        )
+        _ = controller.update(time: 100, deltaTime: 0, availableWidth: 500)
+
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+        let expiry = controller.update(
+            time: 101.41,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertEqual(expiry.microAction, .type)
+        XCTAssertEqual(expiry.facing, -1)
+    }
+
+    func testAllLiveAgentsEndingTogetherCancelsPendingHandoff() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 4832, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                activeAgents: peers
+            )
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 100,
+                deltaTime: 0,
+                availableWidth: 500
+            ).microAction,
+            .agentHandoff
+        )
+
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: nil,
+                activeAgents: []
+            )
+        )
+        let noLiveAgent = controller.update(
+            time: 100.5,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertEqual(noLiveAgent.microAction, .type)
+        XCTAssertEqual(noLiveAgent.facing, -1)
+
+        let later = controller.update(
+            time: 102,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertNotEqual(later.microAction, .agentTurn)
+        XCTAssertEqual(later.facing, -1)
+    }
+
+    func testCommittedAgentTurnFinishesWhenAllLiveAgentsEnd() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 4833, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                activeAgents: peers
+            )
+        )
+        _ = controller.update(time: 100, deltaTime: 0, availableWidth: 500)
+        XCTAssertEqual(
+            controller.update(
+                time: 101.41,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .agentTurn
+        )
+
+        controller.ingest(
+            snapshot(
+                .idle,
+                sourceAgent: nil,
+                activeAgents: []
+            )
+        )
+        let stillTurning = controller.update(
+            time: 101.7,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertEqual(stillTurning.microAction, .agentTurn)
+        XCTAssertEqual(stillTurning.facing, 1)
+
+        XCTAssertNotEqual(
+            controller.update(
+                time: 102.43,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .agentTurn
+        )
+    }
+
+    func testPeerDepartureReconciliationWaitsForCommittedAgentTurn() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 4834, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                activeAgents: peers
+            )
+        )
+        _ = controller.update(time: 100, deltaTime: 0, availableWidth: 500)
+        _ = controller.update(time: 101.41, deltaTime: 0.25, availableWidth: 500)
+
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                activeAgents: [.grok]
+            )
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 101.7,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .agentTurn
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 102.43,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .logicCount
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 103.89,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .logicCount
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 103.91,
+                deltaTime: 0.02,
+                availableWidth: 500
+            ).microAction,
+            .type
+        )
+    }
+
+    func testMonitoringGenerationChangeRebaselinesWithoutAgentHandoff() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 484, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                monitoringGeneration: 7,
+                activeAgents: peers
+            )
+        )
+
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                monitoringGeneration: 8,
+                activeAgents: peers
+            )
+        )
+        let rebaseline = controller.update(
+            time: 100,
+            deltaTime: 0,
+            availableWidth: 500
+        )
+        XCTAssertEqual(rebaseline.microAction, .signalSampling)
+        XCTAssertNotEqual(rebaseline.microAction, .agentHandoff)
+        XCTAssertEqual(rebaseline.facing, -1)
+
+        let settled = controller.update(
+            time: 102.95,
+            deltaTime: 0.25,
+            availableWidth: 500
+        )
+        XCTAssertEqual(settled.microAction, .type)
+        XCTAssertEqual(settled.facing, -1)
+    }
+
+    func testSequentialCodexToGrokHandoffWorksButZCodeDoesNot() {
+        let liveController = MigiBehaviorController(
+            seed: 485,
+            initialFacing: -1
+        )
+        liveController.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: [.codex]
+            )
+        )
+        liveController.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .grok,
+                activeAgents: [.grok]
+            )
+        )
+        XCTAssertEqual(
+            liveController.update(
+                time: 100,
+                deltaTime: 0,
+                availableWidth: 500
+            ).microAction,
+            .agentHandoff
+        )
+
+        let zcodeController = MigiBehaviorController(
+            seed: 486,
+            initialFacing: -1
+        )
+        zcodeController.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: [.codex]
+            )
+        )
+        zcodeController.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .zcode,
+                activeAgents: [.zcode]
+            )
+        )
+        let zcode = zcodeController.update(
+            time: 100,
+            deltaTime: 0,
+            availableWidth: 500
+        )
+        XCTAssertNotEqual(zcode.microAction, .agentHandoff)
+        XCTAssertEqual(zcode.facing, -1)
+    }
+
+    func testExplicitReadAndWriteCompleteBeforeAgentHandoff() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let cases: [
+            (
+                hint: CodexToolActionHint,
+                semanticAction: MigiMicroAction,
+                holdDuration: TimeInterval
+            )
+        ] = [
+            (.read, .read, 1.8),
+            (.write, .fineMotor, 2.4),
+        ]
+
+        for (index, item) in cases.enumerated() {
+            let controller = MigiBehaviorController(
+                seed: UInt64(487 + index),
+                initialFacing: -1
+            )
+            controller.force(
+                snapshot(
+                    .thinking,
+                    sourceAgent: .codex,
+                    activeAgents: peers
+                )
+            )
+            controller.ingest(
+                snapshot(
+                    .tool,
+                    toolActionHint: item.hint,
+                    sourceAgent: .grok,
+                    activeAgents: peers
+                )
+            )
+
+            XCTAssertEqual(
+                controller.update(
+                    time: 100,
+                    deltaTime: 0,
+                    availableWidth: 500
+                ).microAction,
+                item.semanticAction
+            )
+            XCTAssertEqual(
+                controller.update(
+                    time: 100 + item.holdDuration - 0.01,
+                    deltaTime: 0.25,
+                    availableWidth: 500
+                ).microAction,
+                item.semanticAction
+            )
+
+            let handoff = controller.update(
+                time: 100 + item.holdDuration + 0.01,
+                deltaTime: 0.02,
+                availableWidth: 500
+            )
+            XCTAssertEqual(handoff.microAction, .agentHandoff)
+            XCTAssertEqual(handoff.facing, -1)
+        }
+    }
+
+    func testWaitingAndFailureCancelAnActiveAgentHandoff() {
+        for (index, interruption) in [
+            CodexActivity.waiting,
+            .failed,
+        ].enumerated() {
+            let peers: Set<MonitoredAgent> = [.codex, .grok]
+            let controller = MigiBehaviorController(
+                seed: UInt64(489 + index),
+                initialFacing: -1
+            )
+            controller.force(
+                snapshot(
+                    .thinking,
+                    sourceAgent: .codex,
+                    activeAgents: peers
+                )
+            )
+            controller.ingest(
+                snapshot(
+                    .thinking,
+                    sourceAgent: .grok,
+                    activeAgents: peers
+                )
+            )
+            XCTAssertEqual(
+                controller.update(
+                    time: 100,
+                    deltaTime: 0,
+                    availableWidth: 500
+                ).microAction,
+                .agentHandoff
+            )
+
+            controller.ingest(
+                snapshot(
+                    interruption,
+                    sourceAgent: .grok,
+                    activeAgents: peers
+                )
+            )
+            let interrupted = controller.update(
+                time: 100.2,
+                deltaTime: 0.2,
+                availableWidth: 500
+            )
+            XCTAssertNotEqual(interrupted.microAction, .agentHandoff)
+            XCTAssertEqual(interrupted.facing, -1)
+        }
+    }
+
+    func testPeerDepartureCompletesOneLogicCountReconciliation() {
+        let peers: Set<MonitoredAgent> = [.codex, .grok]
+        let controller = MigiBehaviorController(seed: 491, initialFacing: -1)
+        controller.force(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: peers
+            )
+        )
+
+        controller.ingest(
+            snapshot(
+                .thinking,
+                sourceAgent: .codex,
+                activeAgents: [.codex]
+            )
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 100,
+                deltaTime: 0,
+                availableWidth: 500
+            ).microAction,
+            .logicCount
+        )
+        XCTAssertEqual(
+            controller.update(
+                time: 101.47,
+                deltaTime: 0.25,
+                availableWidth: 500
+            ).microAction,
+            .logicCount
+        )
+
+        let settled = controller.update(
+            time: 101.49,
+            deltaTime: 0.02,
+            availableWidth: 500
+        )
+        XCTAssertEqual(settled.microAction, .type)
+        XCTAssertEqual(settled.facing, -1)
     }
 
     func testPatrolPlantsInPlaceForTheAuthoredTurnBeforeTranslating() {
@@ -2252,6 +2931,7 @@ final class MigiBehaviorControllerTests: XCTestCase {
         toolActionHint: CodexToolActionHint = .none,
         sourcePath: String? = nil,
         sourceAgent: MonitoredAgent? = nil,
+        monitoringGeneration: UInt64 = 0,
         latestNovelTool: ToolNoveltyEvent? = nil,
         activeAgents: Set<MonitoredAgent> = [],
         failureDisposition: CodexFailureDisposition = .none,
@@ -2264,6 +2944,7 @@ final class MigiBehaviorControllerTests: XCTestCase {
             sourcePath: sourcePath,
             toolActionHint: toolActionHint,
             sourceAgent: sourceAgent,
+            monitoringGeneration: monitoringGeneration,
             latestNovelTool: latestNovelTool,
             activeAgents: activeAgents,
             failureDisposition: failureDisposition,

@@ -21,6 +21,14 @@ public enum MigiMicroAction: Equatable, Hashable {
     case organDrift
     case logicCount
     case signalSampling
+    /// A short biological focus transfer between two live Agent sources.
+    /// The renderer gives it an independent look-around playback clock, then
+    /// the controller performs one planted authored turn before work resumes.
+    case agentHandoff
+    /// The planted 1.01-second authored turn that commits an Agent handoff.
+    /// It is independent from the following work clip so a thinking/tool/review
+    /// change cannot consume the facing change without showing the turn.
+    case agentTurn
     case storagePocket
     case recoveryCare
     case calmDiagnosis
@@ -164,8 +172,20 @@ public final class MigiBehaviorController {
     private static let novelToolGestureDuration: TimeInterval = 0.96 * 2
     private static let novelToolCooldown: TimeInterval = 60
     private static let novelToolTTL: TimeInterval = 12
-    private static let peerSignalEvaluationDuration: TimeInterval = 0.28 * 4
+    /// `signal-sampling` is a six-frame enter/hold/retract action. Preserve its
+    /// complete 1.88 s authored path, 0.70 s peak hold, and 0.36 s tissue entry.
+    private static let peerSignalEvaluationDuration: TimeInterval =
+        MigiAnimationTiming.semanticHandoffDuration + 2.58
     private static let peerSignalEvaluationCooldown: TimeInterval = 12
+    /// One complete `look-around`, including the semantic tissue entry.
+    private static let agentHandoffDuration: TimeInterval =
+        MigiAnimationTiming.semanticHandoffDuration + 1.04
+    private static let agentHandoffCooldown: TimeInterval = 3
+    private static let agentTurnDuration = MigiAnimationTiming.patrolTurnDuration
+    /// One complete, calm one-two-three reconciliation after a peer leaves.
+    private static let peerAssimilationDuration: TimeInterval =
+        MigiAnimationTiming.semanticHandoffDuration + 1.12
+    private static let peerAssimilationCooldown: TimeInterval = 6
     private static let recoveryCareDuration: TimeInterval = 0.9 * 4
     private static let interactionCooldown: TimeInterval = 8
     private static let interactionLookAroundDuration: TimeInterval =
@@ -299,8 +319,18 @@ public final class MigiBehaviorController {
     private var novelToolCooldownUntil: TimeInterval = 0
     private var handledPeerSnapshotGeneration: UInt64 = 0
     private var observedActiveAgents: Set<MonitoredAgent> = []
+    private var observedSourceAgent: MonitoredAgent?
+    private var observedMonitoringGeneration: UInt64?
+    private var presentedSourceAgent: MonitoredAgent?
     private var peerSignalEvaluationUntil: TimeInterval = 0
     private var peerSignalEvaluationCooldownUntil: TimeInterval = 0
+    private var peerAssimilationUntil: TimeInterval = 0
+    private var peerAssimilationCooldownUntil: TimeInterval = 0
+    private var agentHandoffUntil: TimeInterval = 0
+    private var agentHandoffCooldownUntil: TimeInterval = 0
+    private var agentHandoffTargetAgent: MonitoredAgent?
+    private var agentTurnUntil: TimeInterval = 0
+    private var sequentialHandoffContextUntil: TimeInterval = 0
     private var snapshotIngestedAt = Date.distantPast
 
     private var idleSince: TimeInterval?
@@ -444,8 +474,18 @@ public final class MigiBehaviorController {
         novelToolCooldownUntil = 0
         handledPeerSnapshotGeneration = snapshotGeneration
         observedActiveAgents = snapshot.activeAgents
+        observedSourceAgent = snapshot.sourceAgent
+        observedMonitoringGeneration = snapshot.monitoringGeneration
+        presentedSourceAgent = snapshot.sourceAgent
         peerSignalEvaluationUntil = 0
         peerSignalEvaluationCooldownUntil = 0
+        peerAssimilationUntil = 0
+        peerAssimilationCooldownUntil = 0
+        agentHandoffUntil = 0
+        agentHandoffCooldownUntil = 0
+        agentHandoffTargetAgent = nil
+        agentTurnUntil = 0
+        sequentialHandoffContextUntil = 0
         anchoredAttentionIdentity = nil
         nextAnchoredFacingChangeAt = 0
         scoutPhase = .anchored
@@ -878,7 +918,10 @@ public final class MigiBehaviorController {
                     // tool gesture after refractory sleep and the wake sequence.
                     toolActionUntil = max(
                         toolActionUntil,
-                        time + duration + remainingBehaviorDeferral(at: time)
+                        time
+                            + duration
+                            + remainingBehaviorDeferral(at: time)
+                            + remainingAgentTurnDuration(at: time)
                     )
                 } else {
                     toolObservationIsActive = false
@@ -892,7 +935,10 @@ public final class MigiBehaviorController {
                     // operation never flashes away on its output frame.
                     toolActionUntil = max(
                         toolActionUntil,
-                        time + duration + remainingBehaviorDeferral(at: time)
+                        time
+                            + duration
+                            + remainingBehaviorDeferral(at: time)
+                            + remainingAgentTurnDuration(at: time)
                     )
                 }
             }
@@ -955,7 +1001,10 @@ public final class MigiBehaviorController {
         }
 
         novelToolActionUntil =
-            time + Self.novelToolGestureDuration + remainingBehaviorDeferral(at: time)
+            time
+                + Self.novelToolGestureDuration
+                + remainingBehaviorDeferral(at: time)
+                + remainingAgentTurnDuration(at: time)
         novelToolCooldownUntil = time + Self.novelToolCooldown
     }
 
@@ -964,49 +1013,172 @@ public final class MigiBehaviorController {
         at time: TimeInterval
     ) {
         if activity == .waiting || activity == .failed {
-            peerSignalEvaluationUntil = 0
-        } else if peerSignalEvaluationUntil > 0 {
-            let semanticWorkUntil = max(toolActionUntil, novelToolActionUntil)
-            if semanticWorkUntil > time {
-                // Queue the biological peer scan behind explicit work and keep
-                // its complete authored duration even if a tool-output snapshot
-                // renews the read/write latch.
-                peerSignalEvaluationUntil = max(
-                    peerSignalEvaluationUntil,
-                    semanticWorkUntil + Self.peerSignalEvaluationDuration
-                )
-            } else if time >= peerSignalEvaluationUntil {
-                peerSignalEvaluationUntil = 0
+            clearPeerTransitionPresentation(cancelCommittedTurn: true)
+            if let snapshot = latestSnapshot {
+                observedActiveAgents = snapshot.activeAgents
+                observedSourceAgent = snapshot.sourceAgent
+                observedMonitoringGeneration = snapshot.monitoringGeneration
+                presentedSourceAgent = snapshot.sourceAgent
             }
-        }
-
-        guard handledPeerSnapshotGeneration != snapshotGeneration else {
-            return
-        }
-        handledPeerSnapshotGeneration = snapshotGeneration
-
-        let activeAgents = latestSnapshot?.activeAgents ?? []
-        if activeAgents.count < 2 {
-            observedActiveAgents = activeAgents
-            return
-        }
-
-        // A peer set first observed while Migi is asleep, waiting, reviewing,
-        // or reacting to failure remains pending. Consume it only when live work
-        // can actually present the evaluation gesture.
-        guard activity == .thinking || activity == .tool else {
-            return
-        }
-
-        let peerSetChanged = activeAgents != observedActiveAgents
-        observedActiveAgents = activeAgents
-        guard peerSetChanged,
-              time >= peerSignalEvaluationCooldownUntil
-        else {
+            handledPeerSnapshotGeneration = snapshotGeneration
             return
         }
 
         let semanticWorkUntil = max(toolActionUntil, novelToolActionUntil)
+        if semanticWorkUntil > time {
+            // A newly observed explicit read/write or unfamiliar tool always
+            // completes first. Returning to a hidden cue restarts its complete
+            // biological motion instead of resuming halfway through retraction.
+            if peerSignalEvaluationUntil > 0 {
+                peerSignalEvaluationUntil = max(
+                    peerSignalEvaluationUntil,
+                    semanticWorkUntil + Self.peerSignalEvaluationDuration
+                )
+            }
+            if peerAssimilationUntil > 0 {
+                peerAssimilationUntil = max(
+                    peerAssimilationUntil,
+                    semanticWorkUntil + Self.peerAssimilationDuration
+                )
+            }
+            if agentHandoffUntil > 0 {
+                agentHandoffUntil = max(
+                    agentHandoffUntil,
+                    semanticWorkUntil + Self.agentHandoffDuration
+                )
+            }
+        }
+
+        if peerSignalEvaluationUntil > 0, time >= peerSignalEvaluationUntil {
+            peerSignalEvaluationUntil = 0
+        }
+        if peerAssimilationUntil > 0, time >= peerAssimilationUntil {
+            peerAssimilationUntil = 0
+        }
+        guard handledPeerSnapshotGeneration != snapshotGeneration else {
+            scheduleAgentHandoffIfNeeded(
+                for: activity,
+                semanticWorkUntil: semanticWorkUntil,
+                at: time
+            )
+            commitExpiredAgentHandoff(at: time)
+            return
+        }
+        handledPeerSnapshotGeneration = snapshotGeneration
+
+        guard let snapshot = latestSnapshot else { return }
+        let activeAgents = snapshot.activeAgents
+        let sourceAgent = snapshot.sourceAgent
+
+        if let previousGeneration = observedMonitoringGeneration,
+           previousGeneration != snapshot.monitoringGeneration
+        {
+            // A user-selected monitoring-mode epoch is a new coordinate system,
+            // not an Agent-to-Agent handoff. Rebaseline the lead direction, but
+            // still acknowledge an already-live collaboration once.
+            clearPeerTransitionPresentation(cancelCommittedTurn: true)
+            observedMonitoringGeneration = snapshot.monitoringGeneration
+            observedActiveAgents = activeAgents
+            observedSourceAgent = sourceAgent
+            presentedSourceAgent = sourceAgent
+            if activeAgents.count >= 2,
+               activity == .thinking || activity == .tool
+            {
+                schedulePeerSignalEvaluation(
+                    semanticWorkUntil: semanticWorkUntil,
+                    at: time
+                )
+            }
+            return
+        }
+        observedMonitoringGeneration = snapshot.monitoringGeneration
+
+        let previousAgents = observedActiveAgents
+        let previousSource = observedSourceAgent
+        let enteredCollaboration =
+            previousAgents.count < 2 && activeAgents.count >= 2
+        let leftCollaboration =
+            previousAgents.count >= 2 && activeAgents.count < 2
+        let liveSourceChanged =
+            previousSource != nil
+                && sourceAgent != nil
+                && previousSource != sourceAgent
+                && previousSource != .zcode
+                && sourceAgent != .zcode
+        let sequentialContext =
+            liveSourceChanged
+                && previousAgents.union(activeAgents).count >= 2
+
+        observedActiveAgents = activeAgents
+        observedSourceAgent = sourceAgent
+        if presentedSourceAgent == nil {
+            presentedSourceAgent = sourceAgent
+        }
+
+        if enteredCollaboration,
+           activity == .thinking || activity == .tool
+        {
+            schedulePeerSignalEvaluation(
+                semanticWorkUntil: semanticWorkUntil,
+                at: time
+            )
+        }
+
+        if activeAgents.isEmpty {
+            // All live sources can disappear in the same 0.8 s polling pass.
+            // There is no remaining branch to count or direction to acquire,
+            // even when this was a one-Agent rather than two-Agent episode.
+            clearPeerTransitionPresentation()
+            presentedSourceAgent = sourceAgent
+            return
+        }
+
+        if leftCollaboration,
+           activeAgents.count == 1,
+           activity == .thinking || activity == .tool || activity == .review,
+           time >= peerAssimilationCooldownUntil
+        {
+            let presentationBeginsAt = max(
+                time + remainingBehaviorDeferral(at: time),
+                semanticWorkUntil,
+                peerSignalEvaluationUntil,
+                agentTurnUntil
+            )
+            peerAssimilationUntil =
+                presentationBeginsAt + Self.peerAssimilationDuration
+            peerAssimilationCooldownUntil =
+                time + Self.peerAssimilationCooldown
+            // The remaining lead owns the now-reconciled direction; do not add
+            // another long turn immediately after the completion gesture.
+            presentedSourceAgent = sourceAgent
+            agentHandoffUntil = 0
+            agentHandoffTargetAgent = nil
+        }
+
+        if sequentialContext {
+            sequentialHandoffContextUntil =
+                max(sequentialHandoffContextUntil, time + 3.5)
+        }
+        if activeAgents.count >= 2 || time < sequentialHandoffContextUntil {
+            if let sourceAgent, sourceAgent != .zcode {
+                agentHandoffTargetAgent = sourceAgent
+            } else if sourceAgent == .zcode {
+                agentHandoffTargetAgent = nil
+            }
+        }
+        scheduleAgentHandoffIfNeeded(
+            for: activity,
+            semanticWorkUntil: semanticWorkUntil,
+            at: time
+        )
+        commitExpiredAgentHandoff(at: time)
+    }
+
+    private func schedulePeerSignalEvaluation(
+        semanticWorkUntil: TimeInterval,
+        at time: TimeInterval
+    ) {
+        guard time >= peerSignalEvaluationCooldownUntil else { return }
         let presentationBeginsAt = max(
             time + remainingBehaviorDeferral(at: time),
             semanticWorkUntil
@@ -1015,6 +1187,73 @@ public final class MigiBehaviorController {
             presentationBeginsAt + Self.peerSignalEvaluationDuration
         peerSignalEvaluationCooldownUntil =
             time + Self.peerSignalEvaluationCooldown
+    }
+
+    private func scheduleAgentHandoffIfNeeded(
+        for activity: CodexActivity,
+        semanticWorkUntil: TimeInterval,
+        at time: TimeInterval
+    ) {
+        guard activity == .thinking || activity == .tool,
+              agentHandoffUntil == 0,
+              agentTurnUntil <= time,
+              time >= agentHandoffCooldownUntil,
+              let target = agentHandoffTargetAgent,
+              target != presentedSourceAgent,
+              observedActiveAgents.count >= 2
+                || time < sequentialHandoffContextUntil
+        else {
+            return
+        }
+        let presentationBeginsAt = max(
+            time + remainingBehaviorDeferral(at: time),
+            semanticWorkUntil,
+            peerSignalEvaluationUntil,
+            peerAssimilationUntil
+        )
+        agentHandoffUntil =
+            presentationBeginsAt + Self.agentHandoffDuration
+        agentHandoffCooldownUntil =
+            time + Self.agentHandoffCooldown
+    }
+
+    private func remainingAgentTurnDuration(at time: TimeInterval) -> TimeInterval {
+        max(agentTurnUntil - time, 0)
+    }
+
+    private func commitExpiredAgentHandoff(at time: TimeInterval) {
+        guard agentHandoffUntil > 0, time >= agentHandoffUntil else { return }
+        agentHandoffUntil = 0
+        defer { agentHandoffTargetAgent = nil }
+        guard let target = agentHandoffTargetAgent,
+              target != .zcode,
+              target != presentedSourceAgent,
+              observedActiveAgents.contains(target)
+                || time < sequentialHandoffContextUntil
+        else {
+            return
+        }
+
+        // Commit only after the newest snapshot has updated the target. This
+        // prevents a source reversal arriving on the expiry frame from first
+        // turning toward a stale Agent. The authored turn then owns its full
+        // clock independently from whichever work pose follows it.
+        facing = -facing
+        presentedSourceAgent = target
+        agentTurnUntil = time + Self.agentTurnDuration
+    }
+
+    private func clearPeerTransitionPresentation(
+        cancelCommittedTurn: Bool = false
+    ) {
+        peerSignalEvaluationUntil = 0
+        peerAssimilationUntil = 0
+        agentHandoffUntil = 0
+        agentHandoffTargetAgent = nil
+        if cancelCommittedTurn {
+            agentTurnUntil = 0
+        }
+        sequentialHandoffContextUntil = 0
     }
 
     private func toolActionHoldDuration(
@@ -1111,6 +1350,13 @@ public final class MigiBehaviorController {
             break
         }
 
+        if time < agentTurnUntil,
+           activity != .waiting,
+           activity != .failed
+        {
+            return (.agentTurn, .none)
+        }
+
         if activity == .idle, time < interactionLookAroundUntil {
             return (.lookAround, .none)
         }
@@ -1155,6 +1401,15 @@ public final class MigiBehaviorController {
                 // shorter eye around a beat later. Explicit work semantics keep
                 // priority so this reaction never shortens reading or writing.
                 return (.signalSampling, .none)
+            }
+            if time < peerAssimilationUntil {
+                // One-two-three is Migi's restrained queue reconciliation: the
+                // completed branch has already withdrawn, and the remaining
+                // work is counted before the ordinary task pose resumes.
+                return (.logicCount, .none)
+            }
+            if time < agentHandoffUntil {
+                return (.agentHandoff, .none)
             }
             return activeBehavior(for: activity, at: time)
         }
@@ -1417,7 +1672,8 @@ public final class MigiBehaviorController {
         switch action {
         case .inspectHand, .palmObserver, .sharpenTip, .protectiveShield,
              .rapidNotes, .fineMotor,
-             .organDrift, .logicCount, .signalSampling, .storagePocket,
+             .organDrift, .logicCount, .signalSampling, .agentHandoff, .agentTurn,
+             .storagePocket,
              .recoveryCare, .calmDiagnosis, .lookAround, .stretch, .dormant:
             isCanonicalTransformation = true
         case .none, .blink, .detachedScoutReturn, .read, .checkPhone, .type:
@@ -1661,7 +1917,7 @@ public final class MigiBehaviorController {
         case .none, .blink:
             actionBoost = 0
         case .read, .checkPhone, .lookAround, .rapidNotes, .logicCount,
-             .signalSampling, .palmObserver:
+             .signalSampling, .agentHandoff, .agentTurn, .palmObserver:
             actionBoost = 0.08
         case .inspectHand, .sharpenTip, .protectiveShield, .stretch,
              .fineMotor, .organDrift, .storagePocket:

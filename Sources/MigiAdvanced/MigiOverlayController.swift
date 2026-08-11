@@ -12,6 +12,7 @@ final class MigiOverlayController {
 
     private let panel: MigiPanel
     private let metalView: MigiFullSpriteView
+    private let speechBubble = MigiSpeechBubbleController()
     private var anchorOrigin: CGPoint
     private var lastRoamOffset: CGPoint = .zero
     private var manualDragInProgress = false
@@ -57,6 +58,7 @@ final class MigiOverlayController {
             guard let self else { return }
             self.manualDragInProgress = isDragging
             self.rebaseAnchor(at: origin)
+            self.speechBubble.updatePetFrame(self.panel.frame)
             if !isDragging {
                 self.persistPosition()
             }
@@ -67,10 +69,20 @@ final class MigiOverlayController {
         clampPanelToVisibleScreen()
         panel.orderFrontRegardless()
         metalView.resumeRendering()
+        speechBubble.updatePetFrame(panel.frame)
     }
 
     func ingest(_ snapshot: CodexActivitySnapshot) {
         metalView.ingest(snapshot)
+    }
+
+    /// Echo the monitored Agent's reply as a speech bubble. Pass nil to fade it out.
+    func showSpeech(_ text: String?, revision: UInt64?) {
+        speechBubble.showSpeech(text, revision: revision, petFrame: panel.frame)
+    }
+
+    func clearSpeech(immediate: Bool = true) {
+        speechBubble.clearSpeech(immediate: immediate)
     }
 
     func setDemoMode(_ enabled: Bool, fixedActivity: CodexActivity? = nil) {
@@ -101,6 +113,10 @@ final class MigiOverlayController {
         metalView.setQAWakePhase(phase)
     }
 
+    func setQAAgentTransition(_ rawValue: String) {
+        metalView.setQAAgentTransition(rawValue)
+    }
+
     func triggerQAInteraction() {
         metalView.triggerQAInteraction()
     }
@@ -116,6 +132,7 @@ final class MigiOverlayController {
         clampPanelToVisibleScreen()
         panel.orderFrontRegardless()
         persistPosition()
+        speechBubble.updatePetFrame(panel.frame)
     }
 
     func setPetSize(_ size: CGSize) {
@@ -135,6 +152,7 @@ final class MigiOverlayController {
             forKey: Self.sizePreferenceVersionKey
         )
         persistPosition()
+        speechBubble.updatePetFrame(panel.frame)
     }
 
     private func applyRoaming(_ offset: CGPoint) {
@@ -160,6 +178,7 @@ final class MigiOverlayController {
         if !NSEqualPoints(panel.frame.origin, proposed) {
             panel.setFrameOrigin(proposed)
         }
+        speechBubble.updatePetFrame(panel.frame)
     }
 
     private func rebaseAnchor(at visibleOrigin: CGPoint) {

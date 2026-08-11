@@ -129,6 +129,14 @@ public struct CodexActivitySnapshot: Sendable {
     public var activeAgents: Set<MonitoredAgent>
     public var failureDisposition: CodexFailureDisposition
     public var relationshipProfile: MigiRelationshipProfile
+    /// Most recent user-visible Agent reply that is still inside its display
+    /// lifetime. This is independent of the activity winner in all-Agent mode.
+    public var spokenText: String?
+    public var spokenAgent: MonitoredAgent?
+    /// Changes for each accepted utterance, including an identical reply in a
+    /// later turn. The UI uses it to restart presentation without replaying
+    /// duplicate JSONL representations of the same message.
+    public var spokenRevision: UInt64?
 
     public init(
         activity: CodexActivity,
@@ -141,7 +149,10 @@ public struct CodexActivitySnapshot: Sendable {
         latestNovelTool: ToolNoveltyEvent? = nil,
         activeAgents: Set<MonitoredAgent> = [],
         failureDisposition: CodexFailureDisposition = .none,
-        relationshipProfile: MigiRelationshipProfile = .init()
+        relationshipProfile: MigiRelationshipProfile = .init(),
+        spokenText: String? = nil,
+        spokenAgent: MonitoredAgent? = nil,
+        spokenRevision: UInt64? = nil
     ) {
         self.activity = activity
         self.detail = detail
@@ -154,6 +165,9 @@ public struct CodexActivitySnapshot: Sendable {
         self.activeAgents = activeAgents
         self.failureDisposition = failureDisposition
         self.relationshipProfile = relationshipProfile
+        self.spokenText = spokenText
+        self.spokenAgent = spokenAgent
+        self.spokenRevision = spokenRevision
     }
 }
 
@@ -226,6 +240,21 @@ public final class CodexStateMonitor: @unchecked Sendable {
         let startedAt: Date
     }
 
+    private enum SpokenKind: Int {
+        case commentary = 0
+        case answer = 1
+    }
+
+    private struct SpokenMessage {
+        let turnIdentifier: String?
+        var kind: SpokenKind
+        var text: String
+        var updatedAt: Date
+        var completedAt: Date?
+        var originPriority: Int
+        var revision: UInt64
+    }
+
     private struct SourceRuntime {
         var offset: UInt64 = 0
         var isInitialized = false
@@ -236,6 +265,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         var fileIdentifier: UInt64?
         var latestEventAt = Date.distantPast
         var activeTurn: ActiveTurn?
+        var spokenMessage: SpokenMessage?
         var openCalls: [String: OpenCall] = [:]
         var evidence: [CodexActivity: Evidence] = [:]
 
@@ -246,6 +276,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
             remainder.removeAll(keepingCapacity: false)
             fileIdentifier = nil
             activeTurn = nil
+            spokenMessage = nil
             openCalls.removeAll(keepingCapacity: true)
             evidence.removeAll(keepingCapacity: true)
             latestEventAt = .distantPast
@@ -295,6 +326,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
     private var seenTools: Set<ToolIdentity> = []
     private var latestNovelTool: ToolNoveltyEvent?
     private var noveltySequence: UInt64 = 0
+    private var spokenRevisionSequence: UInt64 = 0
     private var epochBaselineSources: Set<SourceKey>?
     private var epochNoveltyCutoff: Date?
     private var relationshipState: PersistedRelationshipState
@@ -310,6 +342,9 @@ public final class CodexStateMonitor: @unchecked Sendable {
     private let maximumReadSize: UInt64 = 1_048_576
     private let maximumLineSize = 4_194_304
     private let noveltyLifetime: TimeInterval = 12
+    static let maximumSpokenTextCharacters = 4_096
+    private let completedSpeechLifetime: TimeInterval = 6
+    private let streamingSpeechLifetime: TimeInterval = 8
 
     public init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.homeDirectory = homeDirectory.standardizedFileURL
@@ -889,6 +924,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
 
         if ["failed", "failure", "error", "errored"].contains(status) {
             runtime.activeTurn = nil
+            runtime.spokenMessage = nil
             runtime.openCalls.removeAll(keepingCapacity: true)
             remember(
                 .failed,
@@ -904,11 +940,12 @@ public final class CodexStateMonitor: @unchecked Sendable {
 
         switch updateType {
         case "user_message_chunk":
-            if runtime.activeTurn == nil {
+            if runtime.activeTurn == nil || runtime.spokenMessage?.kind == .answer {
                 runtime.activeTurn = ActiveTurn(
-                    identifier: params["sessionId"] as? String,
+                    identifier: grokTurnIdentifier(params: params, update: update),
                     startedAt: timestamp
                 )
+                runtime.spokenMessage = nil
             }
             remember(
                 .thinking,
@@ -922,9 +959,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
         case "agent_thought_chunk":
             if runtime.activeTurn == nil {
                 runtime.activeTurn = ActiveTurn(
-                    identifier: params["sessionId"] as? String,
+                    identifier: grokTurnIdentifier(params: params, update: update),
                     startedAt: timestamp
                 )
+                runtime.spokenMessage = nil
             }
             remember(
                 .thinking,
@@ -936,6 +974,24 @@ public final class CodexStateMonitor: @unchecked Sendable {
             )
 
         case "agent_message_chunk":
+            if runtime.activeTurn == nil {
+                runtime.activeTurn = ActiveTurn(
+                    identifier: grokTurnIdentifier(params: params, update: update),
+                    startedAt: timestamp
+                )
+                runtime.spokenMessage = nil
+            }
+            if let content = update["content"] as? [String: Any],
+               let text = content["text"] as? String,
+               !text.isEmpty
+            {
+                appendSpokenText(
+                    text,
+                    turnIdentifier: runtime.activeTurn?.identifier,
+                    at: timestamp,
+                    runtime: &runtime
+                )
+            }
             remember(
                 .thinking,
                 detail: "Grok is responding",
@@ -956,6 +1012,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
             )
 
         case "turn_completed":
+            markSpokenMessageCompleted(at: timestamp, runtime: &runtime)
             runtime.activeTurn = nil
             runtime.openCalls.removeAll(keepingCapacity: true)
             remember(
@@ -970,6 +1027,18 @@ public final class CodexStateMonitor: @unchecked Sendable {
         default:
             break
         }
+    }
+
+    private func grokTurnIdentifier(
+        params: [String: Any],
+        update: [String: Any]
+    ) -> String? {
+        let paramsMetadata = params["_meta"] as? [String: Any]
+        let updateMetadata = update["_meta"] as? [String: Any]
+        return (paramsMetadata?["promptId"] as? String)
+            ?? (updateMetadata?["promptId"] as? String)
+            ?? (update["prompt_id"] as? String)
+            ?? (params["sessionId"] as? String)
     }
 
     private func applyGrokToolEvent(
@@ -1100,6 +1169,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         }
 
         if zcodeRecordFailed(envelope, response: response, finishReason: finishReason) {
+            runtime.spokenMessage = nil
             remember(
                 .failed,
                 detail: "ZCode request failed",
@@ -1131,6 +1201,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         }
 
         if finishReason == "stop" {
+            captureZCodeSpokenText(envelope, at: timestamp, runtime: &runtime)
             remember(
                 .review,
                 detail: "Reviewing ZCode's result",
@@ -1149,6 +1220,34 @@ public final class CodexStateMonitor: @unchecked Sendable {
                 runtime: &runtime
             )
         }
+    }
+
+    /// Pull assistant reply text out of a ZCode `model_io` record and accumulate
+    /// it on the in-flight turn so the speech bubble can echo it. ZCode persists
+    /// one completed provider response per line; the final text answer lives in
+    /// `response.text` when `finishReason == "stop"`.
+    private func captureZCodeSpokenText(
+        _ envelope: [String: Any],
+        at timestamp: Date,
+        runtime: inout SourceRuntime
+    ) {
+        guard let response = envelope["response"] as? [String: Any],
+              let text = response["text"] as? String,
+              !text.isEmpty
+        else {
+            return
+        }
+        let turnIdentifier = (envelope["turnId"] as? String)
+            ?? (envelope["requestId"] as? String)
+        replaceSpokenText(
+            text,
+            turnIdentifier: turnIdentifier,
+            kind: .answer,
+            originPriority: 3,
+            at: timestamp,
+            runtime: &runtime
+        )
+        markSpokenMessageCompleted(at: timestamp, runtime: &runtime)
     }
 
     private func zcodeRecordFailed(
@@ -1266,6 +1365,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
 
         if isFailure(record, payloadType: payloadType, status: status) {
             runtime.activeTurn = nil
+            runtime.spokenMessage = nil
             runtime.openCalls.removeAll(keepingCapacity: true)
             remember(
                 .failed,
@@ -1285,6 +1385,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         switch payloadType {
         case "task_started":
             runtime.openCalls.removeAll(keepingCapacity: true)
+            runtime.spokenMessage = nil
             runtime.activeTurn = ActiveTurn(
                 identifier: record.payload["turn_id"] as? String,
                 startedAt: record.timestamp
@@ -1299,7 +1400,32 @@ public final class CodexStateMonitor: @unchecked Sendable {
             return
 
         case "task_complete":
-            clearTurn(using: record.payload["turn_id"] as? String, runtime: &runtime)
+            let completedTurnIdentifier = record.payload["turn_id"] as? String
+            guard turnCompletionMatches(
+                completedTurnIdentifier,
+                runtime: runtime
+            ) else {
+                // A delayed completion from an older rollout turn must not
+                // replace or finish the newer turn currently being followed.
+                return
+            }
+            let turnIdentifier = (record.payload["turn_id"] as? String)
+                ?? runtime.activeTurn?.identifier
+            if let finalText = record.payload["last_agent_message"] as? String {
+                replaceSpokenText(
+                    finalText,
+                    turnIdentifier: turnIdentifier,
+                    kind: .answer,
+                    originPriority: 3,
+                    at: record.timestamp,
+                    runtime: &runtime
+                )
+            }
+            clearTurn(
+                using: completedTurnIdentifier,
+                completedAt: record.timestamp,
+                runtime: &runtime
+            )
             runtime.openCalls.removeAll(keepingCapacity: true)
             remember(
                 .review,
@@ -1312,6 +1438,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
 
         case "turn_aborted":
             runtime.activeTurn = nil
+            runtime.spokenMessage = nil
             runtime.openCalls.removeAll(keepingCapacity: true)
             remember(
                 .failed,
@@ -1388,10 +1515,41 @@ public final class CodexStateMonitor: @unchecked Sendable {
         }
 
         let phase = (record.payload["phase"] as? String)?.lowercased() ?? ""
-        if payloadType == "agent_message", phase == "final_answer" {
+        if payloadType == "agent_message",
+           phase == "final_answer" || phase == "commentary"
+        {
+            captureCodexSpokenText(
+                record,
+                kind: phase == "final_answer" ? .answer : .commentary,
+                originPriority: 2,
+                runtime: &runtime
+            )
             remember(
-                .review,
-                detail: "Reviewing the result",
+                phase == "final_answer" ? .review : .thinking,
+                detail: phase == "final_answer" ? "Reviewing the result" : "Thinking",
+                at: record.timestamp,
+                sourcePath: sourcePath,
+                runtime: &runtime
+            )
+            return
+        }
+
+        if envelopeType == "response_item", payloadType == "message" {
+            let role = (record.payload["role"] as? String)?.lowercased() ?? ""
+            guard role == "assistant",
+                  phase == "final_answer" || phase == "commentary"
+            else {
+                return
+            }
+            captureCodexSpokenText(
+                record,
+                kind: phase == "final_answer" ? .answer : .commentary,
+                originPriority: 1,
+                runtime: &runtime
+            )
+            remember(
+                phase == "final_answer" ? .review : .thinking,
+                detail: phase == "final_answer" ? "Reviewing the result" : "Thinking",
                 at: record.timestamp,
                 sourcePath: sourcePath,
                 runtime: &runtime
@@ -1404,8 +1562,6 @@ public final class CodexStateMonitor: @unchecked Sendable {
             || payloadType == "token_count"
             || payloadType == "sub_agent_activity"
             || payloadType == "context_compacted"
-            || (payloadType == "agent_message" && phase == "commentary")
-            || (envelopeType == "response_item" && payloadType == "message")
         {
             remember(
                 .thinking,
@@ -1417,6 +1573,45 @@ public final class CodexStateMonitor: @unchecked Sendable {
                 runtime: &runtime
             )
         }
+    }
+
+    /// Capture one complete Codex commentary/final message. The event form uses
+    /// `payload.message`; the response-item form uses `content[].output_text`.
+    /// Repeated representations replace/no-op rather than concatenate.
+    private func captureCodexSpokenText(
+        _ record: RolloutRecord,
+        kind: SpokenKind,
+        originPriority: Int,
+        runtime: inout SourceRuntime
+    ) {
+        if runtime.activeTurn == nil {
+            runtime.activeTurn = ActiveTurn(
+                identifier: record.payload["turn_id"] as? String,
+                startedAt: record.timestamp
+            )
+        }
+
+        let rawText: String?
+        if let message = record.payload["message"] as? String, !message.isEmpty {
+            rawText = message
+        } else if let content = record.payload["content"] as? [[String: Any]] {
+            let pieces = content.compactMap { item -> String? in
+                guard (item["type"] as? String) == "output_text" else { return nil }
+                return item["text"] as? String
+            }
+            rawText = pieces.isEmpty ? nil : pieces.joined(separator: "\n")
+        } else {
+            rawText = nil
+        }
+        guard let rawText else { return }
+        replaceSpokenText(
+            rawText,
+            turnIdentifier: runtime.activeTurn?.identifier,
+            kind: kind,
+            originPriority: originPriority,
+            at: record.timestamp,
+            runtime: &runtime
+        )
     }
 
     private func applyToolCall(
@@ -1795,11 +1990,166 @@ public final class CodexStateMonitor: @unchecked Sendable {
         return .routine
     }
 
-    private func clearTurn(using identifier: String?, runtime: inout SourceRuntime) {
-        guard let activeTurn = runtime.activeTurn else { return }
-        if identifier == nil || activeTurn.identifier == nil || identifier == activeTurn.identifier {
-            runtime.activeTurn = nil
+    private func replaceSpokenText(
+        _ rawText: String,
+        turnIdentifier: String?,
+        kind: SpokenKind,
+        originPriority: Int,
+        at timestamp: Date,
+        runtime: inout SourceRuntime
+    ) {
+        guard let text = normalizedSpokenText(rawText) else { return }
+
+        if let current = runtime.spokenMessage,
+           current.turnIdentifier == turnIdentifier
+        {
+            if current.text == text, current.kind == kind {
+                return
+            }
+            if current.kind.rawValue > kind.rawValue {
+                return
+            }
+            if current.kind == kind {
+                if timestamp < current.updatedAt {
+                    return
+                }
+                if timestamp == current.updatedAt,
+                   current.originPriority > originPriority
+                {
+                    return
+                }
+            }
         }
+
+        spokenRevisionSequence &+= 1
+        runtime.spokenMessage = SpokenMessage(
+            turnIdentifier: turnIdentifier,
+            kind: kind,
+            text: text,
+            updatedAt: timestamp,
+            completedAt: nil,
+            originPriority: originPriority,
+            revision: spokenRevisionSequence
+        )
+    }
+
+    private func appendSpokenText(
+        _ chunk: String,
+        turnIdentifier: String?,
+        at timestamp: Date,
+        runtime: inout SourceRuntime
+    ) {
+        guard !chunk.isEmpty else { return }
+        let existing: String
+        if let current = runtime.spokenMessage,
+           current.turnIdentifier == turnIdentifier,
+           current.kind == .answer,
+           current.completedAt == nil
+        {
+            existing = current.text
+        } else {
+            existing = ""
+        }
+        let combined = boundedSpokenText(existing + chunk)
+        guard !combined.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              combined != runtime.spokenMessage?.text
+        else {
+            return
+        }
+
+        spokenRevisionSequence &+= 1
+        runtime.spokenMessage = SpokenMessage(
+            turnIdentifier: turnIdentifier,
+            kind: .answer,
+            text: combined,
+            updatedAt: timestamp,
+            completedAt: nil,
+            originPriority: 3,
+            revision: spokenRevisionSequence
+        )
+    }
+
+    private func normalizedSpokenText(_ rawText: String) -> String? {
+        var text = rawText
+        let opening = "<oai-mem-citation>"
+        let closing = "</oai-mem-citation>"
+        while let start = text.range(of: opening) {
+            if let end = text.range(of: closing, range: start.upperBound..<text.endIndex) {
+                text.removeSubrange(start.lowerBound..<end.upperBound)
+            } else {
+                text.removeSubrange(start.lowerBound..<text.endIndex)
+            }
+        }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        return boundedSpokenText(text)
+    }
+
+    private func boundedSpokenText(_ text: String) -> String {
+        guard text.count > Self.maximumSpokenTextCharacters else { return text }
+        return String(text.suffix(Self.maximumSpokenTextCharacters))
+    }
+
+    private func markSpokenMessageCompleted(
+        at timestamp: Date,
+        runtime: inout SourceRuntime
+    ) {
+        guard var message = runtime.spokenMessage else { return }
+        guard message.completedAt == nil else { return }
+        message.completedAt = max(timestamp, message.updatedAt)
+        runtime.spokenMessage = message
+    }
+
+    private func spokenMessageIsFresh(_ message: SpokenMessage, now: Date) -> Bool {
+        let anchor = message.completedAt ?? message.updatedAt
+        let lifetime = message.completedAt == nil
+            ? streamingSpeechLifetime
+            : completedSpeechLifetime
+        let age = now.timeIntervalSince(anchor)
+        return age >= -2 && age <= lifetime
+    }
+
+    private func clearTurn(
+        using identifier: String?,
+        completedAt timestamp: Date,
+        runtime: inout SourceRuntime
+    ) {
+        if let activeTurn = runtime.activeTurn {
+            guard identifier == nil
+                    || activeTurn.identifier == nil
+                    || identifier == activeTurn.identifier
+            else {
+                return
+            }
+            markSpokenMessageCompleted(at: timestamp, runtime: &runtime)
+            runtime.activeTurn = nil
+            return
+        }
+
+        if let message = runtime.spokenMessage,
+           identifier == nil
+                || message.turnIdentifier == nil
+                || identifier == message.turnIdentifier
+        {
+            markSpokenMessageCompleted(at: timestamp, runtime: &runtime)
+        }
+    }
+
+    private func turnCompletionMatches(
+        _ identifier: String?,
+        runtime: SourceRuntime
+    ) -> Bool {
+        if let activeTurn = runtime.activeTurn {
+            return identifier == nil
+                || activeTurn.identifier == nil
+                || identifier == activeTurn.identifier
+        }
+        if let message = runtime.spokenMessage {
+            return identifier == nil
+                || message.turnIdentifier == nil
+                || identifier == message.turnIdentifier
+        }
+        return true
     }
 
     private func isToolCompletion(_ payloadType: String) -> Bool {
@@ -1888,6 +2238,11 @@ public final class CodexStateMonitor: @unchecked Sendable {
             {
                 runtime.activeTurn = nil
             }
+            if let message = runtime.spokenMessage,
+               !spokenMessageIsFresh(message, now: now)
+            {
+                runtime.spokenMessage = nil
+            }
             sources[key] = runtime
         }
     }
@@ -1930,6 +2285,15 @@ public final class CodexStateMonitor: @unchecked Sendable {
         var candidates: [Evidence] = []
         let activeAgents = makeActiveAgents(now: now)
         let latestNovelTool = freshNovelTool(now: now)
+        // Speech is arbitrated independently from activity. In all-Agent mode a
+        // newer reply must remain visible even when another Agent wins the state
+        // cluster because of a higher-priority failure or waiting event.
+        var spokenText: String? = nil
+        var spokenTextObservedAt = Date.distantPast
+        var spokenAgent: MonitoredAgent? = nil
+        var spokenRevision: UInt64? = nil
+        var spokenKind: SpokenKind?
+        var spokenSourcePath = ""
 
         for (key, runtime) in sources {
             for call in runtime.openCalls.values {
@@ -1948,12 +2312,38 @@ public final class CodexStateMonitor: @unchecked Sendable {
 
             candidates.append(contentsOf: runtime.evidence.values)
 
+            if let message = runtime.spokenMessage,
+               spokenMessageIsFresh(message, now: now)
+            {
+                let observedAt = max(message.updatedAt, message.completedAt ?? .distantPast)
+                let shouldReplace: Bool
+                if observedAt != spokenTextObservedAt {
+                    shouldReplace = observedAt > spokenTextObservedAt
+                } else if message.kind != spokenKind {
+                    shouldReplace = message.kind.rawValue > (spokenKind?.rawValue ?? -1)
+                } else if key.agent != spokenAgent {
+                    shouldReplace = priority(of: key.agent)
+                        > (spokenAgent.map { priority(of: $0) } ?? -1)
+                } else {
+                    shouldReplace = spokenSourcePath.isEmpty || key.path < spokenSourcePath
+                }
+                if shouldReplace {
+                    spokenText = message.text
+                    spokenTextObservedAt = observedAt
+                    spokenAgent = key.agent
+                    spokenRevision = message.revision
+                    spokenKind = message.kind
+                    spokenSourcePath = key.path
+                }
+            }
+
             if let activeTurn = runtime.activeTurn {
+                let turnObservedAt = max(activeTurn.startedAt, runtime.latestEventAt)
                 candidates.append(
                     Evidence(
                         activity: .thinking,
                         detail: "Working",
-                        observedAt: max(activeTurn.startedAt, runtime.latestEventAt),
+                        observedAt: turnObservedAt,
                         sourcePath: key.path,
                         toolActionHint: .none,
                         sourceAgent: key.agent,
@@ -1971,7 +2361,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
                 sourcePath: nil,
                 monitoringGeneration: monitoringGeneration,
                 latestNovelTool: latestNovelTool,
-                activeAgents: activeAgents
+                activeAgents: activeAgents,
+                spokenText: spokenText,
+                spokenAgent: spokenAgent,
+                spokenRevision: spokenRevision
             )
         }
 
@@ -1991,7 +2384,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
                 sourcePath: nil,
                 monitoringGeneration: monitoringGeneration,
                 latestNovelTool: latestNovelTool,
-                activeAgents: activeAgents
+                activeAgents: activeAgents,
+                spokenText: spokenText,
+                spokenAgent: spokenAgent,
+                spokenRevision: spokenRevision
             )
         }
 
@@ -2005,7 +2401,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
             monitoringGeneration: monitoringGeneration,
             latestNovelTool: latestNovelTool,
             activeAgents: activeAgents,
-            failureDisposition: winner.failureDisposition
+            failureDisposition: winner.failureDisposition,
+            spokenText: spokenText,
+            spokenAgent: spokenAgent,
+            spokenRevision: spokenRevision
         )
     }
 
@@ -2177,6 +2576,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
             lastDelivered?.failureDisposition != snapshot.failureDisposition
         let relationshipChanged =
             lastDelivered?.relationshipProfile != snapshot.relationshipProfile
+        let spokenTextChanged = lastDelivered?.spokenText != snapshot.spokenText
+        let spokenAgentChanged = lastDelivered?.spokenAgent != snapshot.spokenAgent
+        let spokenRevisionChanged =
+            lastDelivered?.spokenRevision != snapshot.spokenRevision
 
         guard lastDelivered == nil
             || stateChanged
@@ -2189,6 +2592,9 @@ public final class CodexStateMonitor: @unchecked Sendable {
             || activeAgentsChanged
             || failureDispositionChanged
             || relationshipChanged
+            || spokenTextChanged
+            || spokenAgentChanged
+            || spokenRevisionChanged
         else {
             return
         }
