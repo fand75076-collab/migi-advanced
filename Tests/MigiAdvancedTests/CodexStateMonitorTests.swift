@@ -247,13 +247,16 @@ final class CodexStateMonitorTests: XCTestCase {
     func testExplicitToolActionClassificationIsConservative() throws {
         let arguments = try jsonString(["cmd": "echo hello"])
         let readArguments = try jsonString(["cmd": "rg -n Migi Sources"])
+        let testArguments = try jsonString(["cmd": "swift test"])
         let cases: [(String, String?, CodexToolActionHint)] = [
             ("read_mcp_resource", nil, .read),
             ("search_query", nil, .read),
             ("apply_patch", nil, .write),
             ("edit_file", nil, .write),
             ("write_file", nil, .write),
-            ("exec_command", arguments, .none),
+            ("web_search", nil, .search),
+            ("exec_command", arguments, .execute),
+            ("exec_command", testArguments, .verify),
             ("shell_command", readArguments, .read),
         ]
 
@@ -307,7 +310,7 @@ final class CodexStateMonitorTests: XCTestCase {
     func testPatchAndWebCompletionCarryWriteAndReadHints() throws {
         let cases: [(String, CodexToolActionHint)] = [
             ("patch_apply_end", .write),
-            ("web_search_end", .read),
+            ("web_search_end", .search),
         ]
 
         for item in cases {
@@ -491,7 +494,46 @@ final class CodexStateMonitorTests: XCTestCase {
 
         let snapshot = fixture.monitor.pollSynchronously(now: now)
         XCTAssertEqual(snapshot.activity, .tool)
-        XCTAssertEqual(snapshot.toolActionHint, .read)
+        XCTAssertEqual(snapshot.toolActionHint, .search)
+    }
+
+    func testSubAgentAndCompactionCarryDistinctHints() throws {
+        let cases: [(String, CodexToolActionHint)] = [
+            ("sub_agent_activity", .scout),
+            ("context_compacted", .compact),
+        ]
+
+        for item in cases {
+            let fixture = try Fixture()
+            defer { fixture.remove() }
+            let now = Date()
+            try fixture.write(
+                record(type: item.0, at: now.addingTimeInterval(-1))
+            )
+
+            let snapshot = fixture.monitor.pollSynchronously(now: now)
+            XCTAssertEqual(snapshot.activity, .tool, item.0)
+            XCTAssertEqual(snapshot.toolActionHint, item.1, item.0)
+        }
+    }
+
+    func testFreshBytesDriveLiveThroughputEstimate() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let now = Date()
+        try fixture.write(record(type: "task_started", at: now.addingTimeInterval(-1)))
+        let initial = fixture.monitor.pollSynchronously(now: now)
+        XCTAssertEqual(initial.logThroughput, 0)
+
+        let later = now.addingTimeInterval(0.8)
+        try fixture.append(record(type: "reasoning", at: later))
+        let afterAppend = fixture.monitor.pollSynchronously(now: later)
+        XCTAssertGreaterThan(afterAppend.logThroughput, 0)
+
+        let silent = fixture.monitor.pollSynchronously(
+            now: later.addingTimeInterval(0.8)
+        )
+        XCTAssertLessThan(silent.logThroughput, afterAppend.logThroughput)
     }
 
     func testDefaultModeNeverReadsGrokOrZCode() throws {
@@ -1053,12 +1095,13 @@ final class CodexStateMonitorTests: XCTestCase {
     func testGrokToolKindsUseConservativeIndependentAdapter() throws {
         let cases: [(String, String, CodexToolActionHint)] = [
             ("read", "read_file", .read),
-            ("search", "web_search", .read),
-            ("fetch", "web_fetch", .read),
+            ("search", "grep_repo", .read),
+            ("search", "web_search", .search),
+            ("fetch", "web_fetch", .search),
             ("write", "write_file", .write),
             ("edit", "edit_file", .write),
             ("apply", "apply_patch", .write),
-            ("execute", "run_terminal_command", .none),
+            ("execute", "run_terminal_command", .execute),
         ]
 
         for (index, item) in cases.enumerated() {
@@ -1141,12 +1184,12 @@ final class CodexStateMonitorTests: XCTestCase {
     func testZCodeRealShapeToolNamesAreClassifiedConservatively() throws {
         let cases: [(String, CodexToolActionHint)] = [
             ("Read", .read),
-            ("WebFetch", .read),
+            ("WebFetch", .search),
             ("search", .read),
             ("Write", .write),
             ("Edit", .write),
             ("ApplyPatch", .write),
-            ("Bash", .none),
+            ("Bash", .execute),
         ]
 
         for (index, item) in cases.enumerated() {

@@ -16,6 +16,11 @@ public enum MigiMicroAction: Equatable, Hashable {
     case sharpenTip
     case protectiveShield
     case detachedScoutReturn
+    /// A monitored Agent spawned a detached sub-agent: the same canon image as
+    /// the idle scout's return, but wrist-anchored, one shot, cooldown-gated.
+    /// Deliberately a distinct case so the controller rule that clears an
+    /// out-of-phase `.detachedScoutReturn` never erases this showpiece.
+    case subAgentScout
     case rapidNotes
     case fineMotor
     case organDrift
@@ -105,6 +110,14 @@ public struct MigiBehaviorFrame {
     /// Renderers may use this to tighten eye tracking without replacing the
     /// semantic work, waiting, or diagnostic pose already on screen.
     public let isUserAttentionActive: Bool
+    /// How many real monitored agents were concurrently active in the latest
+    /// snapshot. Renderers use it to spread branch-eye scan sectors while
+    /// Migi tracks parallel work.
+    public let activeAgentCount: Int
+    /// Persisted canon sleep-debt pressure, 0...1: quietens idle antics,
+    /// shortens the road to deep sleep, lengthens its minimum hold, and
+    /// lowers overall body tone.
+    public let fatigue: CGFloat
 
     /// Compatibility surface for renderers that only distinguish deep sleep.
     public var isDeepSleeping: Bool {
@@ -123,7 +136,32 @@ public struct MigiBehaviorFrame {
 
     /// Dream disturbance advances the dormant tissue clip slightly faster.
     public var clipPlaybackRate: Double {
-        wakePhase == .dreamDisturbance ? 1.25 : 1
+        var rate = wakePhase == .dreamDisturbance ? 1.25 : 1
+        if wakePhase == .awake, activity != .idle {
+            switch microAction {
+            case .type, .rapidNotes, .read:
+                // Body honesty: fingers and page turns track the real fresh
+                // bytes arriving in the monitored logs.
+                rate *= clipPlaybackScale
+            default:
+                break
+            }
+        }
+        return rate
+    }
+
+    /// Live throughput mapped into canonical bounds (1 = authored rate),
+    /// neutral outside real monitored sessions and any demo/QA snapshot.
+    public let clipPlaybackScale: Double
+
+    /// True while the rare long-pose work blink is inside its window.
+    /// Composed with the pose (never replaces it), unlike the idle `.blink`
+    /// micro action which owns the anchored idle body outright.
+    public let blinkActive: Bool
+
+    /// Any blink source, for renderers driving the shared eyelid curve.
+    public var blinkWanted: Bool {
+        microAction == .blink || blinkActive
     }
 
     public init(
@@ -140,7 +178,11 @@ public struct MigiBehaviorFrame {
         failureDisposition: CodexFailureDisposition = .none,
         relationshipStage: MigiRelationshipStage = .cautious,
         scoutPhase: MigiScoutPhase = .anchored,
-        isUserAttentionActive: Bool = false
+        isUserAttentionActive: Bool = false,
+        activeAgentCount: Int = 1,
+        fatigue: CGFloat = 0,
+        blinkActive: Bool = false,
+        clipPlaybackScale: Double = 1
     ) {
         self.activity = activity
         self.prop = prop
@@ -156,6 +198,10 @@ public struct MigiBehaviorFrame {
         self.relationshipStage = relationshipStage
         self.scoutPhase = scoutPhase
         self.isUserAttentionActive = isUserAttentionActive
+        self.activeAgentCount = max(activeAgentCount, 1)
+        self.fatigue = min(max(fatigue, 0), 1)
+        self.blinkActive = blinkActive
+        self.clipPlaybackScale = min(max(clipPlaybackScale, 0.5), 1.6)
     }
 }
 
@@ -166,9 +212,53 @@ public struct MigiBehaviorFrame {
 public final class MigiBehaviorController {
     private static let minimumWorkHold: TimeInterval = 20
     private static let failedReactionDuration: TimeInterval = 3.2
-    private static let protectiveShieldDuration: TimeInterval = 0.9
+    /// The defensive shield is a reflex that strengthens with the bond: canon
+    /// Migi intervenes faster and holds longer once coexistence becomes
+    /// protection. Cautious 0.7s, cooperative 0.9s, protective 1.2s.
+    private static func protectiveShieldDuration(
+        for stage: MigiRelationshipStage
+    ) -> TimeInterval {
+        switch stage {
+        case .cautious:
+            return 0.7
+        case .cooperative:
+            return 0.9
+        case .protective:
+            return 1.2
+        }
+    }
+
     private static let readActionHoldDuration: TimeInterval = 1.8
     private static let writeActionHoldDuration: TimeInterval = 2.4
+    /// `palm-observer` is an authored enter-hold-retract cycle of ~1.94 s.
+    private static let searchActionHoldDuration: TimeInterval = 2.0
+    /// One complete `logic-count` beat plus a short settle margin.
+    private static let verifyActionHoldDuration: TimeInterval = 1.5
+    /// One complete `storage-pocket` enter-hold-retract cycle (~2.10 s).
+    private static let compactActionHoldDuration: TimeInterval = 2.25
+    /// One complete `detached-scout-return` loop (~2.18 s).
+    private static let scoutActionHoldDuration: TimeInterval = 2.35
+    /// Sub-agent records arrive in bursts; the scout showpiece replays at most
+    /// once per minute no matter how chatty the sub-agent is.
+    private static let scoutGestureCooldown: TimeInterval = 60
+    private static let compactGestureCooldown: TimeInterval = 45
+    /// Silence beyond this means the reply stream has paused.
+    private static let spokenStreamingGrace: TimeInterval = 1.4
+    /// A user who leaves Migi waiting this long gets the bored canon self-check.
+    private static let waitingEscalationDelay: TimeInterval = 90
+    /// One sustained work turn earns a single tissue unwind on the way to idle.
+    private static let sustainedWorkStretchThreshold: TimeInterval = 60
+    private static let earnedStretchDuration: TimeInterval = 1.2
+    /// A user holding their gaze on the body earns one deliberate turn toward
+    /// them. Rare and short: staring back constantly would be surveillance,
+    /// not coexistence.
+    private static let stareHoldDuration: TimeInterval = 4.5
+    private static let stareCooldown: TimeInterval = 20
+    /// Canon: roughly four hours of deep sleep per day. Eight working hours
+    /// accrue a full debt; deep sleep pays it back at five times the rate.
+    private static let fatigueWorkRate: Double = 1.0 / (8 * 3600)
+    private static let fatigueAmbientRate: Double = 0.15 / (8 * 3600)
+    private static let fatigueSleepRecoveryRate: Double = 5.0 / (8 * 3600)
     private static let novelToolGestureDuration: TimeInterval = 0.96 * 2
     private static let novelToolCooldown: TimeInterval = 60
     private static let novelToolTTL: TimeInterval = 12
@@ -290,6 +380,9 @@ public final class MigiBehaviorController {
     ]
 
     private var random: MigiSeededRandom
+    /// Deterministic QA disables work-pose blinks so captures never race the
+    /// stability timer. Production leaves this on.
+    public var allowsWorkPoseBlinks = true
     private let deepSleepDelay: TimeInterval
     private let minimumDeepSleepDuration: TimeInterval
     private let dreamDisturbanceDuration: TimeInterval
@@ -311,6 +404,12 @@ public final class MigiBehaviorController {
     private var recoveryCareUntil: TimeInterval = 0
     private var failureRecoveryWasScheduled = false
     private var latchedToolAction: CodexToolActionHint = .none
+    private var lastObservedSpokenRevision: UInt64?
+    private var spokenStreamingUntil: TimeInterval = 0
+    private var waitingSince: TimeInterval?
+    private var sustainedWorkBeganAt: TimeInterval?
+    private var scoutGestureCooldownUntil: TimeInterval = 0
+    private var compactGestureCooldownUntil: TimeInterval = 0
     private var toolActionUntil: TimeInterval = 0
     private var toolObservationIsActive = false
     private var consumedNovelToolSequences: Set<UInt64> = []
@@ -370,6 +469,17 @@ public final class MigiBehaviorController {
     private var nextInteractionAllowedAt: TimeInterval = 0
     private var userAttentionUntil: TimeInterval = 0
     private var interactionLookAroundUntil: TimeInterval = 0
+    private var requestedStareDirection: CGFloat = 1
+    private var pendingStareGeneration: UInt64 = 0
+    private var handledStareGeneration: UInt64 = 0
+    private var stareDirection: CGFloat?
+    private var stareFacingHoldUntil: TimeInterval = 0
+    private var stareCooldownUntil: TimeInterval = 0
+    private var fatigue: Double = 0
+    private var lastPoseSignature: (CodexActivity, MigiMicroAction, MigiProp)?
+    private var lastPoseChangeAt: TimeInterval = 0
+    private var nextWorkBlinkAt: TimeInterval = 0
+    private var workBlinkUntil: TimeInterval = 0
     private var scoutInteractionPauseUntil: TimeInterval = 0
     private var scoutInteractionReturnPending = false
     private var scoutInteractionHoldOffset: CGPoint = .zero
@@ -450,9 +560,108 @@ public final class MigiBehaviorController {
         pendingInteractionGeneration &+= 1
     }
 
+    /// Queues a sustained-gaze acknowledgement. Gating (cooldown, sleep,
+    /// threat, locomotion) happens in `update` where the monotonic clock lives.
+    /// Pass nil to release the hold early when the pointer leaves the body.
+    public func ingestStareAttention(_ direction: CGFloat?) {
+        guard let direction else {
+            stareDirection = nil
+            stareFacingHoldUntil = 0
+            return
+        }
+        requestedStareDirection = direction < 0 ? -1 : 1
+        pendingStareGeneration &+= 1
+    }
+
+    private func consumePendingStare(
+        for activity: CodexActivity,
+        at time: TimeInterval
+    ) {
+        guard handledStareGeneration != pendingStareGeneration else {
+            return
+        }
+        handledStareGeneration = pendingStareGeneration
+
+        guard wakePhase == .awake,
+              !isCredibleThreat(activity),
+              activity == .idle || activity == .waiting,
+              !isMoving,
+              scoutPhase == .anchored,
+              time >= stareCooldownUntil
+        else {
+            return
+        }
+
+        stareDirection = requestedStareDirection
+        stareFacingHoldUntil = time + Self.stareHoldDuration
+        stareCooldownUntil = time + Self.stareCooldown
+    }
+
+    private func updateStareFacing(at time: TimeInterval) {
+        if stareDirection != nil,
+           (time >= stareFacingHoldUntil || wakePhase != .awake)
+        {
+            stareDirection = nil
+            stareFacingHoldUntil = 0
+        }
+        guard let stareDirection,
+              time < stareFacingHoldUntil,
+              !isMoving,
+              facing != stareDirection
+        else {
+            return
+        }
+        // selectSprite observes the facing flip and owns the authored planted
+        // turn from here.
+        facing = stareDirection
+    }
+
+    /// Canon physiology: sustained cooperation accrues a sleep debt that only
+    /// complete sleep repays. A tired Migi is quieter, sleeps sooner and
+    /// longer — never faster or cuter.
+    private func integrateFatigue(
+        for activity: CodexActivity,
+        deltaTime: TimeInterval
+    ) {
+        switch wakePhase {
+        case .deepSleep:
+            fatigue = max(fatigue - deltaTime * Self.fatigueSleepRecoveryRate, 0)
+        case .awake, .dreamDisturbance, .lookAround:
+            let rate =
+                activity.isMigiWorkActivity || activity == .failed
+                    ? Self.fatigueWorkRate
+                    : Self.fatigueAmbientRate
+            fatigue = min(fatigue + deltaTime * rate, 1)
+        }
+    }
+
+    /// Restores the persisted sleep debt at launch. `value` is a clamped 0...1.
+    public func restoreFatigue(_ value: Double) {
+        fatigue = min(max(value.isFinite ? value : 0, 0), 1)
+    }
+
+    /// Exhaustion brings sleep sooner (30 min → 9 min at full debt).
+    private var effectiveDeepSleepDelay: TimeInterval {
+        deepSleepDelay * (1 - 0.7 * fatigue)
+    }
+
+    /// …and holds it longer once down (20 s → 60 s at full debt).
+    private var effectiveMinimumDeepSleepDuration: TimeInterval {
+        minimumDeepSleepDuration * (1 + 2 * fatigue)
+    }
+
     /// Used by the explicit visual demo/QA route. It changes presentation state
     /// immediately and clears normal hysteresis without affecting patrol position.
     public func force(_ snapshot: CodexActivitySnapshot) {
+        force(snapshot, resetFatigue: false)
+    }
+
+    /// QA routes additionally rebase the sleep debt so captures stay
+    /// reproducible; the menu-driven demo keeps the user's real ledger.
+    public func force(
+        _ snapshot: CodexActivitySnapshot,
+        resetFatigue: Bool
+    ) {
         latestSnapshot = snapshot
         snapshotGeneration &+= 1
         handledSnapshotGeneration = snapshotGeneration
@@ -468,6 +677,12 @@ public final class MigiBehaviorController {
         latchedToolAction = .none
         toolActionUntil = 0
         toolObservationIsActive = false
+        lastObservedSpokenRevision = snapshot.spokenRevision
+        spokenStreamingUntil = 0
+        waitingSince = nil
+        sustainedWorkBeganAt = nil
+        scoutGestureCooldownUntil = 0
+        compactGestureCooldownUntil = 0
         consumedNovelToolSequences.removeAll(keepingCapacity: true)
         handledNoveltySnapshotGeneration = snapshotGeneration
         novelToolActionUntil = 0
@@ -503,6 +718,18 @@ public final class MigiBehaviorController {
         wakeSequenceStartedAt = nil
         pendingQAWakePhaseAnchor = nil
         resetInteractionState()
+        pendingStareGeneration = 0
+        handledStareGeneration = 0
+        stareDirection = nil
+        stareFacingHoldUntil = 0
+        stareCooldownUntil = 0
+        if resetFatigue {
+            fatigue = 0
+        }
+        lastPoseSignature = nil
+        lastPoseChangeAt = 0
+        nextWorkBlinkAt = 0
+        workBlinkUntil = 0
         clearIdleBehavior()
         wasIdle = false
     }
@@ -546,9 +773,13 @@ public final class MigiBehaviorController {
         let activity = resolveActivity(at: safeTime)
         updateSleepState(for: activity, at: safeTime)
         updateToolActionLatch(at: safeTime)
+        updateWorkObservation(for: activity, at: safeTime)
         updateNovelToolLatch(for: activity, at: safeTime)
         updatePeerSignalEvaluation(for: activity, at: safeTime)
         consumePendingInteraction(for: activity, at: safeTime)
+        consumePendingStare(for: activity, at: safeTime)
+        integrateFatigue(for: activity, deltaTime: safeDelta)
+        updateStareFacing(at: safeTime)
         var behavior = resolveMicroBehavior(for: activity, at: safeTime)
         let wakeProgress = wakeProgress(at: safeTime)
         let offset = updatePatrol(
@@ -577,6 +808,36 @@ public final class MigiBehaviorController {
             wakePhase: wakePhase,
             at: safeTime
         )
+        let poseSignature = (activity, behavior.action, behavior.prop)
+        if lastPoseSignature.map({ $0 == poseSignature }) != true {
+            lastPoseSignature = poseSignature
+            lastPoseChangeAt = safeTime
+            nextWorkBlinkAt = 0
+            workBlinkUntil = 0
+        }
+        // Even an unblinking worker is not a statue: after a long, perfectly
+        // stable pose Migi grants a single rare slow blink. Eye-only, so the
+        // authored work pose is never interrupted. Deterministic QA keeps
+        // pose timelines fully reproducible by opting out.
+        let poseSupportsWorkBlink =
+            allowsWorkPoseBlinks
+            && wakePhase == .awake
+            && (activity == .thinking || activity == .tool || activity == .review)
+        if poseSupportsWorkBlink {
+            if safeTime - lastPoseChangeAt > 8 {
+                if nextWorkBlinkAt == 0 {
+                    nextWorkBlinkAt = safeTime + random.next(in: 12...25)
+                }
+                if safeTime >= nextWorkBlinkAt {
+                    workBlinkUntil = safeTime + 0.34
+                    nextWorkBlinkAt = safeTime + random.next(in: 26...48)
+                }
+            } else {
+                workBlinkUntil = 0
+            }
+        } else {
+            workBlinkUntil = 0
+        }
         if wakePhase == .dreamDisturbance || wakePhase == .lookAround {
             // Wake targets are already continuous curves. Applying another
             // response filter here would flatten the short dream phase and
@@ -607,14 +868,18 @@ public final class MigiBehaviorController {
             isUserAttentionActive:
                 wakePhase == .awake
                     && !isCredibleThreat(activity)
-                    && safeTime < userAttentionUntil
+                    && safeTime < userAttentionUntil,
+            activeAgentCount: observedActiveAgents.count,
+            fatigue: CGFloat(fatigue),
+            blinkActive: safeTime < workBlinkUntil,
+            clipPlaybackScale: liveClipPlaybackScale(at: safeTime, activity: activity)
         )
     }
 
     private func initializeClock(at time: TimeInterval) {
         clockIsInitialized = true
         nextIdleActionAt = time + random.next(in: 8...16)
-        nextBlinkAt = time + random.next(in: 3.5...8.5)
+        nextBlinkAt = time + random.next(in: 6...18)
         nextScoutAt = time + random.next(in: scoutInterval)
         stopUntil = nextScoutAt
     }
@@ -771,7 +1036,7 @@ public final class MigiBehaviorController {
                 return
             case .thinking, .tool, .failed:
                 let sleptFor = time - (deepSleepStartedAt ?? time)
-                guard sleptFor >= minimumDeepSleepDuration else {
+                guard sleptFor >= effectiveMinimumDeepSleepDuration else {
                     return
                 }
                 clearIdleBehavior()
@@ -805,7 +1070,7 @@ public final class MigiBehaviorController {
 
             if wakePhase == .awake,
                let idleSince,
-                time - idleSince >= deepSleepDelay
+                time - idleSince >= effectiveDeepSleepDelay
             {
                 wakePhase = .deepSleep
                 deepSleepStartedAt = time
@@ -898,7 +1163,7 @@ public final class MigiBehaviorController {
     private func remainingBehaviorDeferral(at time: TimeInterval) -> TimeInterval {
         if wakePhase == .deepSleep {
             let sleptFor = time - (deepSleepStartedAt ?? time)
-            return max(minimumDeepSleepDuration - sleptFor, 0)
+            return max(effectiveMinimumDeepSleepDuration - sleptFor, 0)
                 + dreamDisturbanceDuration
                 + wakeDuration
                 + MigiAnimationTiming.wakeHandoffDuration
@@ -909,8 +1174,39 @@ public final class MigiBehaviorController {
     private func updateToolActionLatch(at time: TimeInterval) {
         if handledSnapshotGeneration != snapshotGeneration {
             handledSnapshotGeneration = snapshotGeneration
+
+            // A fresh speech revision during reasoning means the Agent is
+            // actively transcribing its reply; Migi switches from internal
+            // computation to rapid note-taking.
+            if let revision = latestSnapshot?.spokenRevision {
+                if revision != lastObservedSpokenRevision {
+                    lastObservedSpokenRevision = revision
+                    if latestSnapshot?.activity == .thinking {
+                        spokenStreamingUntil = time + Self.spokenStreamingGrace
+                    }
+                }
+            } else {
+                lastObservedSpokenRevision = nil
+            }
+
             if let snapshot = latestSnapshot, snapshot.activity == .tool {
-                let duration = toolActionHoldDuration(for: snapshot.toolActionHint)
+                var duration = toolActionHoldDuration(for: snapshot.toolActionHint)
+                if duration > 0 {
+                    switch snapshot.toolActionHint {
+                    case .scout where time < scoutGestureCooldownUntil,
+                         .compact where time < compactGestureCooldownUntil:
+                        // Bursting records must not loop the showpiece.
+                        duration = 0
+                    case .scout:
+                        scoutGestureCooldownUntil =
+                            time + Self.scoutGestureCooldown
+                    case .compact:
+                        compactGestureCooldownUntil =
+                            time + Self.compactGestureCooldown
+                    default:
+                        break
+                    }
+                }
                 if duration > 0 {
                     latchedToolAction = snapshot.toolActionHint
                     toolObservationIsActive = true
@@ -928,7 +1224,13 @@ public final class MigiBehaviorController {
                 }
             } else if toolObservationIsActive {
                 toolObservationIsActive = false
-                let duration = toolActionHoldDuration(for: latchedToolAction)
+                var duration = toolActionHoldDuration(for: latchedToolAction)
+                if latchedToolAction == .scout || latchedToolAction == .compact {
+                    // One-shot showpieces never renew at the completion
+                    // boundary; their cooldown owns any replay. A renewal
+                    // here would silently double the authored full-body loop.
+                    duration = 0
+                }
                 if duration > 0 {
                     // Completion often changes the monitor back to `.thinking`
                     // immediately. Renew once at that boundary so a completed
@@ -1256,6 +1558,26 @@ public final class MigiBehaviorController {
         sequentialHandoffContextUntil = 0
     }
 
+    /// Waiting and sustained-work bookkeeping. Canon Migi does not vibrate
+    /// while left alone: it settles into a bored self-check, and it unwinds
+    /// once after a genuinely long work turn.
+    private func updateWorkObservation(
+        for activity: CodexActivity,
+        at time: TimeInterval
+    ) {
+        if activity == .waiting {
+            if waitingSince == nil { waitingSince = time }
+        } else {
+            waitingSince = nil
+        }
+        switch activity {
+        case .thinking, .tool, .review:
+            if sustainedWorkBeganAt == nil { sustainedWorkBeganAt = time }
+        case .idle, .waiting, .failed:
+            break
+        }
+    }
+
     private func toolActionHoldDuration(
         for hint: CodexToolActionHint
     ) -> TimeInterval {
@@ -1264,7 +1586,17 @@ public final class MigiBehaviorController {
             return Self.readActionHoldDuration
         case .write:
             return Self.writeActionHoldDuration
-        case .none:
+        case .search:
+            return Self.searchActionHoldDuration
+        case .verify:
+            return Self.verifyActionHoldDuration
+        case .compact:
+            return Self.compactActionHoldDuration
+        case .scout:
+            return Self.scoutActionHoldDuration
+        case .none, .execute:
+            // General shell work stays a sustained pose; only its semantic
+            // beats (a verification run) earn a latched gesture.
             return 0
         }
     }
@@ -1383,12 +1715,22 @@ public final class MigiBehaviorController {
             }
 
             if time < toolActionUntil {
+                // The latched showpiece plays its authored path once;
+                // sustained states keep their own fallback pose below.
                 switch latchedToolAction {
                 case .read:
                     return (.read, .book)
                 case .write:
                     return (.fineMotor, .none)
-                case .none:
+                case .search:
+                    return (.palmObserver, .none)
+                case .verify:
+                    return (.logicCount, .none)
+                case .compact:
+                    return (.storagePocket, .none)
+                case .scout:
+                    return (.subAgentScout, .none)
+                case .none, .execute:
                     break
                 }
             }
@@ -1422,7 +1764,22 @@ public final class MigiBehaviorController {
             idleSettleUntil = 0
             blinkUntil = 0
             nextIdleActionAt = time + random.next(in: 8...16)
-            nextBlinkAt = time + random.next(in: 3.5...8.5)
+            nextBlinkAt = time + random.next(in: 6...18)
+            // One sustained real work turn earns a single tissue unwind on
+            // the way back — not a celebration, just the body releasing.
+            if let began = sustainedWorkBeganAt,
+               time - began >= Self.sustainedWorkStretchThreshold,
+               time >= idleActionCooldownUntil[.stretch, default: 0]
+            {
+                idleAction = .stretch
+                idleActionProp = .none
+                idleActionUntil = time + Self.earnedStretchDuration
+                idleActionCooldownUntil[.stretch] = time + 180
+                lastIdleActionFamily = .body
+                nextIdleActionAt =
+                    idleActionUntil + random.next(in: 8...16)
+            }
+            sustainedWorkBeganAt = nil
         }
 
         if idleAction != .none, time >= idleActionUntil {
@@ -1446,11 +1803,32 @@ public final class MigiBehaviorController {
         }
 
         if time >= blinkUntil, time >= nextBlinkAt {
-            blinkUntil = time + random.next(in: 0.13...0.22)
-            nextBlinkAt = blinkUntil + random.next(in: 3.5...8.5)
+            // Canon discipline: Migi almost never blinks. Rare, deliberate,
+            // slow blinks instead of a conversational cadence.
+            blinkUntil = time + random.next(in: 0.30...0.44)
+            nextBlinkAt = blinkUntil + random.next(in: 16...38)
         }
 
         return time < blinkUntil ? (.blink, .none) : (.none, .none)
+    }
+
+    /// Fresh rollout bytes/second → playback scale, log-compressed so streamed
+    /// text reads as faster fingers/page turns while silence settles to a slow
+    /// thinking stroke. Neutral (1) for idle, sleep phases, and any snapshot
+    /// without a real monitored source (demo/QA stay canonical).
+    private func liveClipPlaybackScale(
+        at time: TimeInterval,
+        activity: CodexActivity
+    ) -> Double {
+        guard wakePhase == .awake,
+              activity != .idle,
+              latestSnapshot?.sourcePath != nil,
+              let bps = latestSnapshot?.logThroughput
+        else {
+            return 1
+        }
+        let level = log10(1 + max(bps, 0) / 512)
+        return 0.75 + min(max(level, 0), 1) * 0.65
     }
 
     private func activeBehavior(
@@ -1461,6 +1839,11 @@ public final class MigiBehaviorController {
         case .idle:
             return (.none, .none)
         case .thinking:
+            // An actively streaming reply means the Agent is transcribing its
+            // answer: rapid notes, not internal computation.
+            if time < spokenStreamingUntil {
+                return (.rapidNotes, .none)
+            }
             // Reasoning stays visibly computational, while concrete tool work
             // uses study or fine-motor poses below.
             return (.type, .laptop)
@@ -1470,10 +1853,28 @@ public final class MigiBehaviorController {
                 return (.read, .book)
             case .write:
                 return (.fineMotor, .none)
+            case .search:
+                // Examining a remote specimen held at distance.
+                return (.palmObserver, .none)
+            case .execute, .verify:
+                // Sustained shell output reads as fast transcription; the
+                // verification beat itself is the latched logic-count above.
+                return (.rapidNotes, .none)
+            case .compact, .scout:
+                // If the burst outlives the showpiece, Migi plainly
+                // coordinates the extra work with all tendrils.
+                return (.fineMotor, .none)
             case .none:
                 return (.fineMotor, .none)
             }
         case .waiting:
+            if let waitingSince,
+               time - waitingSince >= Self.waitingEscalationDelay
+            {
+                // Long, truly unattended waiting: Migi sets the phone down
+                // and checks its own fingers.
+                return (.inspectHand, .none)
+            }
             return (.checkPhone, .phone)
         case .review:
             return (.signalSampling, .none)
@@ -1485,7 +1886,7 @@ public final class MigiBehaviorController {
                 credibleThreatPresentationStartedAt = time
             }
             let elapsed = time - (credibleThreatPresentationStartedAt ?? time)
-            return elapsed < Self.protectiveShieldDuration
+            return elapsed < Self.protectiveShieldDuration(for: relationshipStage)
                 ? (.protectiveShield, .none)
                 : (.sharpenTip, .none)
         }
@@ -1499,6 +1900,16 @@ public final class MigiBehaviorController {
         guard !candidates.isEmpty else {
             nextIdleActionAt = time + random.next(in: 3...6)
             return
+        }
+
+        // Exhaustion culls idle antics before any weighting happens: a tired
+        // Migi increasingly chooses to simply remain a hand.
+        if fatigue > 0.55 {
+            let skipProbability = (fatigue - 0.55) / 0.45 * 0.75
+            if random.nextUnit() < skipProbability {
+                nextIdleActionAt = time + random.next(in: 26...44)
+                return
+            }
         }
 
         let totalWeight = candidates.reduce(0) {
@@ -1624,7 +2035,12 @@ public final class MigiBehaviorController {
             let verticalMotion: CGFloat
             switch wakePhase {
             case .deepSleep:
-                verticalMotion = CGFloat(sin(time * 0.32)) * 0.08
+                // Non-sinusoidal breath: sharp inhale, slow exhale. Amplitude
+                // stays at the authored ±0.08 so silhouette QA never drifts.
+                let w = time * 0.32
+                verticalMotion = CGFloat(
+                    (sin(w) + 0.18 * sin(2 * w + 1.1)) * 0.847
+                ) * 0.08
             case .dreamDisturbance:
                 verticalMotion = CGFloat(sin(time * 1.05)) * 0.18
             case .lookAround:
@@ -1675,6 +2091,10 @@ public final class MigiBehaviorController {
              .organDrift, .logicCount, .signalSampling, .agentHandoff, .agentTurn,
              .storagePocket,
              .recoveryCare, .calmDiagnosis, .lookAround, .stretch, .dormant:
+            isCanonicalTransformation = true
+        case .subAgentScout:
+            // Wrist-anchored single clip, driven from root like every other
+            // authored canonical pose.
             isCanonicalTransformation = true
         case .none, .blink, .detachedScoutReturn, .read, .checkPhone, .type:
             isCanonicalTransformation = false
@@ -1840,6 +2260,8 @@ public final class MigiBehaviorController {
         identity: MigiAnchoredAttentionIdentity?,
         at time: TimeInterval
     ) {
+        // A live stare-back owns facing; routine re-anchoring resumes after it.
+        guard stareDirection == nil else { return }
         guard let identity else {
             anchoredAttentionIdentity = nil
             nextAnchoredFacingChangeAt = 0
@@ -1912,6 +2334,9 @@ public final class MigiBehaviorController {
                 : (0.46, 0.90)
         }
 
+        // A tired organism lowers its overall tone rather than moving faster.
+        let fatigueEnergyScale = CGFloat(1 - 0.30 * fatigue)
+
         let actionBoost: CGFloat
         switch action {
         case .none, .blink:
@@ -1924,7 +2349,7 @@ public final class MigiBehaviorController {
             actionBoost = 0.14
         case .recoveryCare, .calmDiagnosis:
             actionBoost = 0.04
-        case .detachedScoutReturn:
+        case .detachedScoutReturn, .subAgentScout:
             actionBoost = 0.12
         case .type:
             actionBoost = 0.1
@@ -1934,7 +2359,7 @@ public final class MigiBehaviorController {
 
         let movementBoost: CGFloat = isMoving ? 0.16 : 0
         let ordinary = (
-            min(base.energy + actionBoost + movementBoost, 1),
+            min(base.energy * fatigueEnergyScale + actionBoost + movementBoost, 1),
             min(base.focus + (action == .none ? 0 : 0.04), 1)
         )
 

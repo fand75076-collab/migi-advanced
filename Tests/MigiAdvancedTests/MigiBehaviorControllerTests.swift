@@ -251,6 +251,49 @@ final class MigiBehaviorControllerTests: XCTestCase {
         XCTAssertEqual(blade.failureDisposition, .credibleThreat)
     }
 
+    func testShieldDurationScalesWithRelationshipStage() {
+        func shieldState(
+            at elapsed: TimeInterval,
+            profile: MigiRelationshipProfile
+        ) -> MigiMicroAction {
+            let controller = MigiBehaviorController(seed: 53)
+            controller.ingest(
+                snapshot(
+                    .failed,
+                    failureDisposition: .credibleThreat,
+                    relationshipProfile: profile
+                )
+            )
+            _ = controller.update(time: 20, deltaTime: 0, availableWidth: 500)
+            return controller.update(
+                time: 20 + elapsed,
+                deltaTime: elapsed,
+                availableWidth: 500
+            ).microAction
+        }
+
+        let cautious = MigiRelationshipProfile(
+            cooperationDuration: 0,
+            familiarToolCount: 0
+        )
+        let cooperative = MigiRelationshipProfile(
+            cooperationDuration: 90 * 60,
+            familiarToolCount: 6
+        )
+        let protective = MigiRelationshipProfile(
+            cooperationDuration: 13 * 3600,
+            familiarToolCount: 12
+        )
+
+        // 警戒期 0.7s:0.75 已进入刃化
+        XCTAssertEqual(shieldState(at: 0.75, profile: cautious), .sharpenTip)
+        // 协作期 0.9s:0.85 仍是盾
+        XCTAssertEqual(shieldState(at: 0.85, profile: cooperative), .protectiveShield)
+        // 保护期 1.2s:1.10 仍是盾,1.25 进入刃化
+        XCTAssertEqual(shieldState(at: 1.10, profile: protective), .protectiveShield)
+        XCTAssertEqual(shieldState(at: 1.25, profile: protective), .sharpenTip)
+    }
+
     func testEstablishedCooperationAddsARestrainedRecoveryCareGesture() {
         let profile = MigiRelationshipProfile(
             cooperationDuration: 45 * 60,
@@ -2926,6 +2969,470 @@ final class MigiBehaviorControllerTests: XCTestCase {
         XCTAssertNotEqual(qaReset.microAction, .lookAround)
     }
 
+    // MARK: - Fine-grained canon work poses
+
+    func testStreamingReplySwitchesThinkingToRapidNotes() {
+        let controller = MigiBehaviorController(seed: 91)
+        controller.ingest(snapshot(.thinking))
+        var frame = controller.update(
+            time: 100, deltaTime: 0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .type)
+        XCTAssertEqual(frame.prop, .laptop)
+
+        // 回复文本开始流出 → 转述速记,而不是内部推算
+        controller.ingest(
+            snapshot(.thinking, spokenText: "chunk", spokenRevision: 1)
+        )
+        frame = controller.update(
+            time: 100.5, deltaTime: 0.5, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .rapidNotes)
+
+        // 宽限期后仍无新片段 → 回到电脑打字
+        frame = controller.update(
+            time: 102.2, deltaTime: 1.7, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .type)
+        XCTAssertEqual(frame.prop, .laptop)
+    }
+
+    func testSubAgentScoutPlaysOncePerMinuteThenCoordinates() {
+        let controller = MigiBehaviorController(seed: 92)
+        controller.ingest(snapshot(.tool, toolActionHint: .scout))
+        var frame = controller.update(
+            time: 100, deltaTime: 0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .subAgentScout)
+
+        // 完整原画播完后,子代理仍在刷屏 → 回落为多触手协调,不循环表演
+        frame = controller.update(
+            time: 102.5, deltaTime: 2.5, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .fineMotor)
+
+        // 冷却期内的子代理记录不再触发离体侦察
+        controller.ingest(snapshot(.tool, toolActionHint: .scout))
+        frame = controller.update(
+            time: 103, deltaTime: 0.5, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .fineMotor)
+
+        // 冷却结束后 → 重新侦察—回归
+        controller.ingest(snapshot(.thinking))
+        frame = controller.update(
+            time: 170, deltaTime: 1, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .type)
+        controller.ingest(snapshot(.tool, toolActionHint: .scout))
+        frame = controller.update(
+            time: 170.5, deltaTime: 0.5, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .subAgentScout)
+    }
+
+    func testOneShotShowpieceNeverRenewedAtCompletionBoundary() {
+        // 一次性手势(scout/compact)在“完成瞬间快照回切 thinking”的边界
+        // 不得像 read/write 那样续期重播——冷却机制才拥有重播权。
+        let controller = MigiBehaviorController(seed: 99)
+        controller.ingest(snapshot(.tool, toolActionHint: .scout))
+        var frame = controller.update(
+            time: 100, deltaTime: 0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .subAgentScout)
+
+        // 完成边界:activity 回切 thinking,锁存本不应续期
+        controller.ingest(snapshot(.thinking))
+        frame = controller.update(
+            time: 101.0, deltaTime: 1.0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .subAgentScout)
+
+        // 2.35s 手势窗口结束后立即回到 thinking 姿态,不再出现第二段循环
+        frame = controller.update(
+            time: 102.4, deltaTime: 1.4, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .type)
+        XCTAssertEqual(frame.prop, .laptop)
+
+        // 对照组:read 锁存在完成边界续期一次(语义保持原有设计)
+        let readController = MigiBehaviorController(seed: 100)
+        readController.ingest(snapshot(.tool, toolActionHint: .read))
+        _ = readController.update(time: 100, deltaTime: 0, availableWidth: 500)
+        readController.ingest(snapshot(.thinking))
+        _ = readController.update(time: 101.0, deltaTime: 1.0, availableWidth: 500)
+        let renewed = readController.update(
+            time: 102.5, deltaTime: 1.5, availableWidth: 500
+        )
+        XCTAssertEqual(renewed.microAction, .read)
+    }
+
+    func testCompactionPlaysStoragePocketOnceThenCoordinates() {
+        let controller = MigiBehaviorController(seed: 93)
+        controller.ingest(snapshot(.tool, toolActionHint: .compact))
+        var frame = controller.update(
+            time: 50, deltaTime: 0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .storagePocket)
+        frame = controller.update(
+            time: 52.24, deltaTime: 2.24, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .storagePocket)
+        frame = controller.update(
+            time: 52.30, deltaTime: 0.06, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .fineMotor)
+    }
+
+    func testVerifyRunPlaysOneLogicCountThenStreamsOutput() {
+        let controller = MigiBehaviorController(seed: 94)
+        controller.ingest(snapshot(.tool, toolActionHint: .verify))
+        var frame = controller.update(
+            time: 50, deltaTime: 0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .logicCount)
+        frame = controller.update(
+            time: 51.49, deltaTime: 1.49, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .logicCount)
+        frame = controller.update(
+            time: 51.60, deltaTime: 0.11, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .rapidNotes)
+    }
+
+    func testSearchHintSustainsPalmObserver() {
+        let controller = MigiBehaviorController(seed: 95)
+        controller.ingest(snapshot(.tool, toolActionHint: .search))
+        var frame = controller.update(
+            time: 50, deltaTime: 0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .palmObserver)
+        frame = controller.update(
+            time: 53.5, deltaTime: 3.5, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .palmObserver)
+    }
+
+    func testLongWaitingEscalatesToBoredSelfCheck() {
+        let controller = MigiBehaviorController(seed: 96)
+        controller.ingest(snapshot(.waiting))
+        var frame = controller.update(
+            time: 300, deltaTime: 0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .checkPhone)
+        XCTAssertEqual(frame.prop, .phone)
+
+        frame = controller.update(
+            time: 389.9, deltaTime: 89.9, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .checkPhone)
+
+        frame = controller.update(
+            time: 390.1, deltaTime: 0.2, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .inspectHand)
+        XCTAssertEqual(frame.prop, .none)
+
+        // 工作一旦恢复,等待计时立刻归零
+        controller.ingest(snapshot(.thinking))
+        frame = controller.update(
+            time: 391, deltaTime: 0.9, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .type)
+    }
+
+    func testSustainedWorkEarnsOneStretchOnIdle() {
+        let controller = MigiBehaviorController(seed: 97)
+        controller.ingest(snapshot(.thinking))
+        _ = controller.update(time: 100, deltaTime: 0, availableWidth: 500)
+        controller.ingest(snapshot(.thinking))
+        var frame = controller.update(
+            time: 170, deltaTime: 70, availableWidth: 500
+        )
+        XCTAssertEqual(frame.activity, .thinking)
+
+        controller.ingest(snapshot(.idle))
+        _ = controller.update(time: 172, deltaTime: 2, availableWidth: 500)
+        frame = controller.update(
+            time: 179, deltaTime: 7, availableWidth: 500
+        )
+        XCTAssertEqual(frame.activity, .thinking)
+
+        // 20 秒工作保持结束后进入待机:长工作赢得一次组织舒展
+        frame = controller.update(
+            time: 191.05, deltaTime: 12, availableWidth: 500
+        )
+        XCTAssertEqual(frame.activity, .idle)
+        XCTAssertEqual(frame.microAction, .stretch)
+
+        frame = controller.update(
+            time: 192.6, deltaTime: 1.55, availableWidth: 500
+        )
+        XCTAssertEqual(frame.microAction, .none)
+
+        // 冷却期内另一段长工作回到待机 → 不再重复伸展
+        controller.ingest(snapshot(.thinking))
+        _ = controller.update(time: 200, deltaTime: 7.4, availableWidth: 500)
+        _ = controller.update(time: 280, deltaTime: 80, availableWidth: 500)
+        controller.ingest(snapshot(.idle))
+        _ = controller.update(time: 290, deltaTime: 10, availableWidth: 500)
+        frame = controller.update(
+            time: 320, deltaTime: 30, availableWidth: 500
+        )
+        XCTAssertEqual(frame.activity, .idle)
+        XCTAssertNotEqual(frame.microAction, .stretch)
+    }
+
+    func testBriefWorkReturnsToIdleWithoutStretch() {
+        let controller = MigiBehaviorController(seed: 98)
+        controller.ingest(snapshot(.thinking))
+        _ = controller.update(time: 100, deltaTime: 0, availableWidth: 500)
+        _ = controller.update(time: 110, deltaTime: 10, availableWidth: 500)
+        controller.ingest(snapshot(.idle))
+        _ = controller.update(time: 112, deltaTime: 2, availableWidth: 500)
+        let frame = controller.update(
+            time: 131.1, deltaTime: 19, availableWidth: 500
+        )
+        XCTAssertEqual(frame.activity, .idle)
+        XCTAssertEqual(frame.microAction, .none)
+    }
+
+    func testRareWorkBlinkComposesWithStablePoses() {
+        let controller = MigiBehaviorController(seed: 130)
+        controller.ingest(snapshot(.tool, toolActionHint: .write))
+
+        var sawBlink = false
+        var blinkWindows = 0
+        var lastActive = false
+        for step in 0..<200 {
+            let time = 10.0 + Double(step) * 0.4
+            let frame = controller.update(
+                time: time, deltaTime: 0.4, availableWidth: 500
+            )
+            // 姿态不因眨眼而变:写工具全程 fineMotor
+            XCTAssertEqual(frame.microAction, .fineMotor)
+            XCTAssertEqual(frame.activity, .tool)
+            if frame.blinkActive {
+                sawBlink = true
+            }
+            if frame.blinkActive && !lastActive { blinkWindows += 1 }
+            lastActive = frame.blinkActive
+        }
+        XCTAssertTrue(sawBlink)
+        XCTAssertGreaterThanOrEqual(blinkWindows, 1)
+        XCTAssertLessThanOrEqual(blinkWindows, 4)
+    }
+
+    // MARK: - Canon stare-back and sleep debt
+
+    func testSustainedGazeEarnsAStareBackDuringIdle() {
+        let controller = MigiBehaviorController(seed: 120)
+        controller.ingest(snapshot(.idle))
+        let facingBefore = controller.update(
+            time: 10, deltaTime: 0, availableWidth: 500
+        ).facing
+
+        controller.ingestStareAttention(-facingBefore)
+        let turned = controller.update(
+            time: 10.2, deltaTime: 0.2, availableWidth: 500
+        )
+        XCTAssertEqual(turned.facing, -facingBefore)
+
+        // 冷却期内的第二次注视不重复转身
+        controller.ingestStareAttention(facingBefore)
+        let cooling = controller.update(
+            time: 10.4, deltaTime: 0.2, availableWidth: 500
+        )
+        XCTAssertEqual(cooling.facing, -facingBefore)
+
+        // 视线移开释放保持;冷却结束后下一次注视仍可获得回视
+        controller.ingestStareAttention(nil)
+        _ = controller.update(time: 15, deltaTime: 4.6, availableWidth: 500)
+        controller.ingestStareAttention(facingBefore)
+        let restared = controller.update(
+            time: 31.2, deltaTime: 16.2, availableWidth: 500
+        )
+        XCTAssertEqual(restared.facing, facingBefore)
+    }
+
+    func testStareIsIgnoredDuringWorkThreatAndPatrol() {
+        let controller = MigiBehaviorController(seed: 121)
+        controller.ingest(snapshot(.thinking))
+        let initial = controller.update(
+            time: 10, deltaTime: 0, availableWidth: 500
+        )
+        controller.ingestStareAttention(-initial.facing)
+        let working = controller.update(
+            time: 10.2, deltaTime: 0.2, availableWidth: 500
+        )
+        XCTAssertEqual(working.facing, initial.facing)
+
+        let threatController = MigiBehaviorController(seed: 122)
+        threatController.ingest(
+            snapshot(.failed, failureDisposition: .credibleThreat)
+        )
+        let locked = threatController.update(
+            time: 10, deltaTime: 0, availableWidth: 500
+        )
+        threatController.ingestStareAttention(-locked.facing)
+        let threatened = threatController.update(
+            time: 10.2, deltaTime: 0.2, availableWidth: 500
+        )
+        XCTAssertEqual(threatened.facing, locked.facing)
+    }
+
+    func testSleepDebtAccumulatesShortensBedtimeAndExtendsSleep() {
+        let controller = MigiBehaviorController(
+            seed: 123,
+            deepSleepDelay: 100,
+            minimumDeepSleepDuration: 20
+        )
+        controller.restoreFatigue(1)
+
+        // 满债时:30min 阈值的 30% → 100s 变为 30s
+        controller.ingest(snapshot(.idle))
+        var frame = controller.update(
+            time: 0, deltaTime: 0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.wakePhase, .awake)
+        frame = controller.update(
+            time: 29.9, deltaTime: 29.9, availableWidth: 500
+        )
+        XCTAssertEqual(frame.wakePhase, .awake)
+        frame = controller.update(
+            time: 30.1, deltaTime: 0.2, availableWidth: 500
+        )
+        XCTAssertEqual(frame.wakePhase, .deepSleep)
+
+        // 满债的最小睡眠从 20s 拉长到 60s:工作信号在 50s 时仍叫不醒
+        controller.ingest(snapshot(.thinking))
+        frame = controller.update(
+            time: 80.0, deltaTime: 49.9, availableWidth: 500
+        )
+        XCTAssertEqual(frame.wakePhase, .deepSleep)
+        frame = controller.update(
+            time: 90.5, deltaTime: 10.5, availableWidth: 500
+        )
+        XCTAssertNotEqual(frame.wakePhase, .deepSleep)
+
+        // 睡眠实际偿还了债务:fatigue 应明显下降且能量回升空间恢复
+        XCTAssertLessThan(frame.fatigue, 1)
+    }
+
+    func testZeroDebtKeepsAuthoredSleepTimings() {
+        let controller = MigiBehaviorController(
+            seed: 124,
+            deepSleepDelay: 100,
+            minimumDeepSleepDuration: 20
+        )
+        controller.ingest(snapshot(.idle))
+        var frame = controller.update(
+            time: 0, deltaTime: 0, availableWidth: 500
+        )
+        XCTAssertEqual(frame.wakePhase, .awake)
+        frame = controller.update(
+            time: 99.9, deltaTime: 99.9, availableWidth: 500
+        )
+        XCTAssertEqual(frame.wakePhase, .awake)
+        frame = controller.update(
+            time: 100.1, deltaTime: 0.2, availableWidth: 500
+        )
+        XCTAssertEqual(frame.wakePhase, .deepSleep)
+
+        controller.ingest(snapshot(.thinking))
+        frame = controller.update(
+            time: 119.9, deltaTime: 19.8, availableWidth: 500
+        )
+        XCTAssertEqual(frame.wakePhase, .deepSleep)
+        frame = controller.update(
+            time: 120.4, deltaTime: 0.5, availableWidth: 500
+        )
+        XCTAssertNotEqual(frame.wakePhase, .deepSleep)
+    }
+
+    func testFatigueDampsIdleEnergyButNeverBelowCanonFloor() {
+        let rested = MigiBehaviorController(seed: 125)
+        rested.ingest(snapshot(.tool, toolActionHint: .write))
+        _ = rested.update(time: 10, deltaTime: 10, availableWidth: 500)
+        let restedFrame = rested.update(
+            time: 10.5, deltaTime: 0.5, availableWidth: 500
+        )
+
+        let tired = MigiBehaviorController(seed: 125)
+        tired.restoreFatigue(1)
+        tired.ingest(snapshot(.tool, toolActionHint: .write))
+        _ = tired.update(time: 10, deltaTime: 10, availableWidth: 500)
+        let tiredFrame = tired.update(
+            time: 10.5, deltaTime: 0.5, availableWidth: 500
+        )
+
+        XCTAssertLessThan(tiredFrame.bodyEnergy, restedFrame.bodyEnergy)
+        XCTAssertGreaterThan(tiredFrame.bodyEnergy, 0)
+    }
+
+    func testSleepPhasesNeverBlink() {
+        let controller = MigiBehaviorController(
+            seed: 131,
+            deepSleepDelay: 5,
+            minimumDeepSleepDuration: 20
+        )
+        controller.ingest(snapshot(.idle))
+        _ = controller.update(time: 0, deltaTime: 0, availableWidth: 500)
+        _ = controller.update(time: 5.2, deltaTime: 5.2, availableWidth: 500)
+        var anyBlink = false
+        for step in 0..<100 {
+            let frame = controller.update(
+                time: 6.0 + Double(step) * 0.4,
+                deltaTime: 0.4,
+                availableWidth: 500
+            )
+            if frame.blinkActive || frame.microAction == .blink {
+                anyBlink = true
+            }
+        }
+        XCTAssertFalse(anyBlink)
+    }
+
+    func testPlaybackRateTracksRealLogThroughput() {
+        // 高速流式输出:速率贴近上限 1.4x
+        let fast = MigiBehaviorController(seed: 140)
+        fast.ingest(
+            snapshot(
+                .thinking,
+                sourcePath: "/tmp/live/rollout.jsonl",
+                logThroughput: 40_000
+            )
+        )
+        let fastFrame = fast.update(time: 10, deltaTime: 0, availableWidth: 500)
+        XCTAssertEqual(fastFrame.clipPlaybackScale, 1.4, accuracy: 0.01)
+        // thinking 姿态(type)实际应用倍率
+        XCTAssertEqual(fastFrame.clipPlaybackRate, 1.4, accuracy: 0.02)
+
+        // 静默:慢速思忖笔画 0.75x
+        let quiet = MigiBehaviorController(seed: 141)
+        quiet.ingest(
+            snapshot(.thinking, sourcePath: "/tmp/live/rollout.jsonl", logThroughput: 0)
+        )
+        let quietFrame = quiet.update(time: 10, deltaTime: 0, availableWidth: 500)
+        XCTAssertEqual(quietFrame.clipPlaybackScale, 0.75, accuracy: 0.01)
+
+        // 无真实来源(demo/QA 路径)永远保持原速
+        let demo = MigiBehaviorController(seed: 142)
+        demo.ingest(snapshot(.thinking, logThroughput: 40_000))
+        let demoFrame = demo.update(time: 10, deltaTime: 0, availableWidth: 500)
+        XCTAssertEqual(demoFrame.clipPlaybackScale, 1)
+        XCTAssertEqual(demoFrame.clipPlaybackRate, 1)
+
+        // 闲置阅读不吃倍率
+        let idleReader = MigiBehaviorController(seed: 143)
+        idleReader.ingest(
+            snapshot(.idle, sourcePath: "/tmp/x", logThroughput: 40_000)
+        )
+        let idleFrame = idleReader.update(time: 10, deltaTime: 0, availableWidth: 500)
+        XCTAssertEqual(idleFrame.clipPlaybackScale, 1)
+    }
+
     private func snapshot(
         _ activity: CodexActivity,
         toolActionHint: CodexToolActionHint = .none,
@@ -2935,7 +3442,10 @@ final class MigiBehaviorControllerTests: XCTestCase {
         latestNovelTool: ToolNoveltyEvent? = nil,
         activeAgents: Set<MonitoredAgent> = [],
         failureDisposition: CodexFailureDisposition = .none,
-        relationshipProfile: MigiRelationshipProfile = .init()
+        relationshipProfile: MigiRelationshipProfile = .init(),
+        spokenText: String? = nil,
+        spokenRevision: UInt64? = nil,
+        logThroughput: Double = 0
     ) -> CodexActivitySnapshot {
         CodexActivitySnapshot(
             activity: activity,
@@ -2948,7 +3458,10 @@ final class MigiBehaviorControllerTests: XCTestCase {
             latestNovelTool: latestNovelTool,
             activeAgents: activeAgents,
             failureDisposition: failureDisposition,
-            relationshipProfile: relationshipProfile
+            relationshipProfile: relationshipProfile,
+            spokenText: spokenText,
+            spokenRevision: spokenRevision,
+            logThroughput: logThroughput
         )
     }
 

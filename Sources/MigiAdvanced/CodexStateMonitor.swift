@@ -20,6 +20,16 @@ public enum CodexToolActionHint: String, Codable, Equatable, Sendable {
     case none
     case read
     case write
+    /// Examining a remote specimen on the web rather than reading a local file.
+    case search
+    /// Running a general shell execution whose output streams back.
+    case execute
+    /// A test/check invocation: methodical, countable verification work.
+    case verify
+    /// Context compaction: storing older material away.
+    case compact
+    /// A detached sub-agent is scouting on Migi's behalf.
+    case scout
 }
 
 /// Separates an ordinary software failure from an explicit safety threat.
@@ -137,6 +147,9 @@ public struct CodexActivitySnapshot: Sendable {
     /// later turn. The UI uses it to restart presentation without replaying
     /// duplicate JSONL representations of the same message.
     public var spokenRevision: UInt64?
+    /// Exponentially weighted fresh rollout bytes/second across sources.
+    /// 0 when the monitor has no live stream or during full catch-up reads.
+    public var logThroughput: Double
 
     public init(
         activity: CodexActivity,
@@ -152,7 +165,8 @@ public struct CodexActivitySnapshot: Sendable {
         relationshipProfile: MigiRelationshipProfile = .init(),
         spokenText: String? = nil,
         spokenAgent: MonitoredAgent? = nil,
-        spokenRevision: UInt64? = nil
+        spokenRevision: UInt64? = nil,
+        logThroughput: Double = 0
     ) {
         self.activity = activity
         self.detail = detail
@@ -168,6 +182,7 @@ public struct CodexActivitySnapshot: Sendable {
         self.spokenText = spokenText
         self.spokenAgent = spokenAgent
         self.spokenRevision = spokenRevision
+        self.logThroughput = max(logThroughput.isFinite ? logThroughput : 0, 0)
     }
 }
 
@@ -335,6 +350,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
     private var relationshipStateIsDirty = false
     private var relationshipNeedsImmediateSave = false
     private var relationshipLastSavedAt = Date.distantPast
+    /// Exponentially weighted bytes/second of freshly appended rollout data
+    /// across every monitored source. Drives the canon "body honesty" playback
+    /// rate for typing and note-taking poses.
+    private var liveThroughput: Double = 0
 
     private let pollInterval: TimeInterval = 0.8
     private let discoveryInterval: TimeInterval = 2.0
@@ -452,10 +471,19 @@ public final class CodexStateMonitor: @unchecked Sendable {
             epochNoveltyCutoff = now
         }
 
+        var pollLiveBytes: UInt64 = 0
         for agent in agents {
             for candidate in candidateFiles[agent] ?? [] {
-                ingest(candidate, now: now)
+                pollLiveBytes &+= ingest(candidate, now: now)
             }
+        }
+        // Exponentially weighted bytes/second across sources. Only steady
+        // tail appends count; initial catch-up and rotation replays are
+        // history, not live output rate.
+        let instantRate = Double(pollLiveBytes) / pollInterval
+        liveThroughput += (instantRate - liveThroughput) * 0.35
+        if liveThroughput < 1 {
+            liveThroughput = 0
         }
 
         pruneSources(now: now)
@@ -678,7 +706,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
         )
     }
 
-    private func ingest(_ candidate: CandidateFile, now: Date) {
+    /// Returns freshly appended bytes this poll, counting only steady-state
+    /// tail reads toward the live output-rate estimator.
+    @discardableResult
+    private func ingest(_ candidate: CandidateFile, now: Date) -> UInt64 {
         let path = candidate.url.path
         let sourceKey = SourceKey(agent: candidate.agent, path: path)
         var runtime = sources[sourceKey] ?? SourceRuntime()
@@ -709,7 +740,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
             runtime.modificationDate = candidate.modificationDate
             runtime.fileIdentifier = candidate.fileIdentifier
             sources[sourceKey] = runtime
-            return
+            return 0
         }
 
         let isInitialRead = !runtime.isInitialized
@@ -741,7 +772,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         guard let handle = try? FileHandle(forReadingFrom: candidate.url) else {
             runtime.modificationDate = candidate.modificationDate
             sources[sourceKey] = runtime
-            return
+            return 0
         }
 
         defer {
@@ -809,7 +840,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
             // retried on the next poll; monitoring must never block the UI.
         }
 
+        let liveBytes: UInt64 =
+            isInitialRead ? 0 : runtime.offset - startOffset
         sources[sourceKey] = runtime
+        return liveBytes
     }
 
     private func recentNoveltyCutoff(now: Date) -> Date {
@@ -1111,10 +1145,16 @@ public final class CodexStateMonitor: @unchecked Sendable {
     ) -> CodexToolActionHint {
         let kind = rawKind.lowercased()
         if kind.contains("execute") {
-            return .none
+            return .execute
         }
 
         let descriptor = "\(kind) \(rawName.lowercased())"
+        if descriptor.contains("web")
+            || descriptor.contains("browser")
+            || descriptor.contains("fetch")
+        {
+            return .search
+        }
         if descriptor.contains("write")
             || descriptor.contains("edit")
             || descriptor.contains("apply")
@@ -1123,7 +1163,6 @@ public final class CodexStateMonitor: @unchecked Sendable {
         }
         if descriptor.contains("read")
             || descriptor.contains("search")
-            || descriptor.contains("fetch")
         {
             return .read
         }
@@ -1281,7 +1320,12 @@ public final class CodexStateMonitor: @unchecked Sendable {
             let name = (call["name"] as? String ?? "").lowercased()
             let hint: CodexToolActionHint
             if name.contains("bash") {
-                hint = .none
+                hint = .execute
+            } else if name.contains("web")
+                || name.contains("browser")
+                || (name.contains("fetch") && !name.contains("file"))
+            {
+                hint = .search
             } else if name.contains("write")
                 || name.contains("edit")
                 || name.contains("applypatch")
@@ -1289,8 +1333,6 @@ public final class CodexStateMonitor: @unchecked Sendable {
             {
                 hint = .write
             } else if name.contains("read")
-                || name.contains("webfetch")
-                || name.contains("web_fetch")
                 || name.contains("search")
             {
                 hint = .read
@@ -1301,7 +1343,12 @@ public final class CodexStateMonitor: @unchecked Sendable {
             if hint == .write {
                 return .write
             }
-            if hint == .read {
+            // strongest-wins aggregation: search > execute > read > none
+            if hint == .search {
+                result = .search
+            } else if hint == .execute, result != .search {
+                result = .execute
+            } else if hint == .read, result == .none {
                 result = .read
             }
         }
@@ -1557,17 +1604,40 @@ public final class CodexStateMonitor: @unchecked Sendable {
             return
         }
 
+        if payloadType == "sub_agent_activity" {
+            // A detached sub-agent is canon scouting: Migi lends a small piece
+            // of itself instead of treating this as ordinary reasoning.
+            remember(
+                .tool,
+                detail: "Scouting a subtask",
+                at: record.timestamp,
+                sourcePath: sourcePath,
+                toolActionHint: .scout,
+                runtime: &runtime
+            )
+            return
+        }
+
+        if payloadType == "context_compacted" {
+            // Compaction is storage, not thought: older material is packed away.
+            remember(
+                .tool,
+                detail: "Storing compacted context",
+                at: record.timestamp,
+                sourcePath: sourcePath,
+                toolActionHint: .compact,
+                runtime: &runtime
+            )
+            return
+        }
+
         if payloadType == "agent_reasoning"
             || payloadType == "reasoning"
             || payloadType == "token_count"
-            || payloadType == "sub_agent_activity"
-            || payloadType == "context_compacted"
         {
             remember(
                 .thinking,
-                detail: payloadType == "sub_agent_activity"
-                    ? "Coordinating work"
-                    : "Thinking",
+                detail: "Thinking",
                 at: record.timestamp,
                 sourcePath: sourcePath,
                 runtime: &runtime
@@ -1781,6 +1851,15 @@ public final class CodexStateMonitor: @unchecked Sendable {
             return .write
         }
 
+        if name.contains("web")
+            || components.contains("fetch")
+            || components.contains("browser")
+            || components.contains("crawl")
+        {
+            // A remote specimen under observation is not local-file reading.
+            return .search
+        }
+
         if components.contains("read")
             || components.contains("search")
             || components.contains("find")
@@ -1822,7 +1901,11 @@ public final class CodexStateMonitor: @unchecked Sendable {
             || name.hasSuffix(".exec_command")
             || name.hasSuffix(".shell_command")
         {
-            return readOnlyShellHint(for: toolInputText(from: payload))
+            let command = toolInputText(from: payload)
+            if readOnlyShellHint(for: command) == .read {
+                return .read
+            }
+            return shellExecutionHint(for: command)
         }
 
         return .none
@@ -1851,6 +1934,58 @@ public final class CodexStateMonitor: @unchecked Sendable {
             return text
         }
         return ""
+    }
+
+    /// Shell executions split into verification runs (tests and checks, a
+    /// methodical countable beat) and ordinary executions whose output
+    /// streams back. Unknown or ambiguous commands stay ordinary executions.
+    private func shellExecutionHint(for rawCommand: String) -> CodexToolActionHint {
+        let command = rawCommand
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !command.isEmpty else { return .execute }
+
+        let separators = CharacterSet(charactersIn: ";&|")
+        let segments = command
+            .components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        let testVerbs: Set<String> = ["test", "tests", "check", "verify", "xctest"]
+        let testRunners: Set<String> = [
+            "pytest", "py.test", "jest", "vitest", "mocha", "rspec",
+            "ctest", "exunit",
+        ]
+        let testables: Set<String> = [
+            "swift", "cargo", "go", "npm", "yarn", "pnpm", "bun",
+            "gradle", "gradlew", "mvn", "xcodebuild", "make", "meson",
+            "bazel", "mix", "dotnet",
+        ]
+
+        for segment in segments {
+            let words = segment.split(whereSeparator: \.isWhitespace).map(String.init)
+            guard let executable = words.first?.split(separator: "/").last.map(String.init) else {
+                continue
+            }
+            if testRunners.contains(executable) {
+                return .verify
+            }
+            if executable.hasPrefix("test") || executable.hasSuffix("test") {
+                return .verify
+            }
+            if testables.contains(executable),
+               words.dropFirst().contains(where: { testVerbs.contains($0) })
+            {
+                return .verify
+            }
+            // xcodebuild test flow commonly travels through xcrun.
+            if executable == "xcrun",
+               words.dropFirst().contains(where: { testVerbs.contains($0) })
+            {
+                return .verify
+            }
+        }
+        return .execute
     }
 
     private func readOnlyShellHint(for rawCommand: String) -> CodexToolActionHint {
@@ -2177,7 +2312,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         case "patch_apply_end":
             return .write
         case "web_search_end":
-            return .read
+            return .search
         default:
             return .none
         }
@@ -2364,7 +2499,8 @@ public final class CodexStateMonitor: @unchecked Sendable {
                 activeAgents: activeAgents,
                 spokenText: spokenText,
                 spokenAgent: spokenAgent,
-                spokenRevision: spokenRevision
+                spokenRevision: spokenRevision,
+                logThroughput: liveThroughput
             )
         }
 
@@ -2387,7 +2523,8 @@ public final class CodexStateMonitor: @unchecked Sendable {
                 activeAgents: activeAgents,
                 spokenText: spokenText,
                 spokenAgent: spokenAgent,
-                spokenRevision: spokenRevision
+                spokenRevision: spokenRevision,
+                logThroughput: liveThroughput
             )
         }
 
@@ -2404,7 +2541,8 @@ public final class CodexStateMonitor: @unchecked Sendable {
             failureDisposition: winner.failureDisposition,
             spokenText: spokenText,
             spokenAgent: spokenAgent,
-            spokenRevision: spokenRevision
+            spokenRevision: spokenRevision,
+                logThroughput: liveThroughput
         )
     }
 
@@ -2538,9 +2676,17 @@ public final class CodexStateMonitor: @unchecked Sendable {
     private func priority(of hint: CodexToolActionHint) -> Int {
         switch hint {
         case .write:
+            return 500
+        case .verify, .compact, .scout:
+            // One-shot semantic beats outrank generic read chatter so a test
+            // run, compaction, or sub-agent scout is not flattened into books.
+            return 400
+        case .search:
             return 300
         case .read:
             return 200
+        case .execute:
+            return 150
         case .none:
             return 100
         }
@@ -2580,6 +2726,11 @@ public final class CodexStateMonitor: @unchecked Sendable {
         let spokenAgentChanged = lastDelivered?.spokenAgent != snapshot.spokenAgent
         let spokenRevisionChanged =
             lastDelivered?.spokenRevision != snapshot.spokenRevision
+        // Throughput changes ride along other deliveries up to a hysteresis
+        // band, so typing cadence tracks real output without spamming frames.
+        let throughputChanged =
+            abs(snapshot.logThroughput - (lastDelivered?.logThroughput ?? 0))
+                > 160
 
         guard lastDelivered == nil
             || stateChanged
@@ -2595,6 +2746,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
             || spokenTextChanged
             || spokenAgentChanged
             || spokenRevisionChanged
+            || throughputChanged
         else {
             return
         }

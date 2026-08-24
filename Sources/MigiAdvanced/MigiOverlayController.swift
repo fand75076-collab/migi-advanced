@@ -16,6 +16,19 @@ final class MigiOverlayController {
     private var anchorOrigin: CGPoint
     private var lastRoamOffset: CGPoint = .zero
     private var manualDragInProgress = false
+    private var lastFrameFatigue: CGFloat = 0
+
+    /// Latest rendered frame, forwarded for app-level observers (voice lines,
+    /// sleep-ledger sampling). Ownership stays with the behavior controller.
+    var onFrame: ((MigiBehaviorFrame) -> Void)?
+
+    /// Current sleep-debt pressure (0…1), sampled from the render pipeline.
+    var currentFatigue: Double { Double(lastFrameFatigue) }
+
+    /// Restores the persisted canon sleep debt at launch (clamped 0...1).
+    func restoreFatigue(_ value: Double) {
+        metalView.restoreFatigue(value)
+    }
 
     var isDemoModeEnabled: Bool {
         metalView.isDemoModeEnabled
@@ -53,6 +66,8 @@ final class MigiOverlayController {
 
         metalView.onBehaviorFrame = { [weak self] frame in
             self?.applyRoaming(frame.worldOffset)
+            self?.lastFrameFatigue = frame.fatigue
+            self?.onFrame?(frame)
         }
         metalView.onManualWindowMove = { [weak self] origin, isDragging in
             guard let self else { return }

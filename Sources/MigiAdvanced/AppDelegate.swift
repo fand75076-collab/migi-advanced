@@ -6,6 +6,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static let failureNotificationsPreferenceKey = "failureNotificationsEnabled"
     private static let monitoringModePreferenceKey = "agentMonitoringMode"
     private static let speechBubblesPreferenceKey = "speechBubblesEnabled"
+    private static let migiVoicePreferenceKey = "migiVoiceLinesEnabled"
+    private static let protectiveBondAnnouncedKey = "migiVoiceBondAnnounced.protective"
 
     private let stateMonitor = CodexStateMonitor()
     private var overlayController: MigiOverlayController?
@@ -14,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var demoMenuItem: NSMenuItem?
     private var monitoringModeMenuItems: [AgentMonitoringMode: NSMenuItem] = [:]
     private var speechBubblesMenuItem: NSMenuItem?
+    private var migiVoiceMenuItem: NSMenuItem?
     private var failureNotificationsMenuItem: NSMenuItem?
     private var launchAtLoginMenuItem: NSMenuItem?
     private var hideObserver: NSObjectProtocol?
@@ -27,6 +30,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var previousLiveActivity: CodexActivity = .idle
     private var lastFailureNotificationAt = Date.distantPast
     private var suppressedSpeechRevision: UInt64?
+    private var voiceLineHoldUntil = Date.distantPast
+    private var lastSleepVoiceLineAt = Date.distantPast
+    private var lastThreatVoiceLineAt = Date.distantPast
+    private var lastWakePhaseSeen: MigiWakePhase?
+    private var lastRelationshipStageSeen: MigiRelationshipStage?
+    private var sleepLedgerTimer: Timer?
+    private var lastPersistedFatigue: Double = -1
     private var latestLiveSnapshot = CodexActivitySnapshot(
         activity: .idle,
         detail: "Idle",
@@ -55,6 +65,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let overlayController = MigiOverlayController()
         self.overlayController = overlayController
+        restoreSleepLedger()
+        overlayController.onFrame = { [weak self] frame in
+            self?.observeBehaviorFrame(frame)
+        }
 
         installStatusItem()
         configureDemoFromArguments()
@@ -79,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         stateMonitor.start()
         stateMonitor.pollNow()
+        startSleepLedgerPersistence()
 
         hideObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didHideNotification,
@@ -103,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         stateMonitor.stop()
+        persistSleepLedgerIfNeeded(force: true)
         DistributedNotificationCenter.default().removeObserver(
             self,
             name: MigiInstanceControl.notificationName,
@@ -189,6 +205,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         speechBubblesMenuItem = speechBubbles
         refreshSpeechBubblesMenu()
 
+        let migiVoice = NSMenuItem(
+            title: "Migi 低语(关键状态)",
+            action: #selector(toggleMigiVoice(_:)),
+            keyEquivalent: ""
+        )
+        migiVoice.target = self
+        migiVoice.toolTip = "入睡、可信威胁与关系进阶时的一句本地硬编码短句;不生成文本,不联网。"
+        menu.addItem(migiVoice)
+        migiVoiceMenuItem = migiVoice
+        refreshMigiVoiceMenu()
+
         let failureNotifications = NSMenuItem(
             title: "异常时通知",
             action: #selector(toggleFailureNotifications(_:)),
@@ -260,6 +287,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         selectedMonitoringMode = mode
         suppressedSpeechRevision = latestLiveSnapshot.spokenRevision
         overlayController?.clearSpeech(immediate: true)
+        // The failure edge detector tracks one mode's stream. Rebase it so a
+        // failure already seen in the old mode cannot suppress (or falsely
+        // re-fire) the first notification in the new mode.
+        previousLiveActivity = .idle
+        lastFailureNotificationAt = .distantPast
         UserDefaults.standard.set(
             mode.rawValue,
             forKey: Self.monitoringModePreferenceKey
@@ -476,6 +508,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// is currently monitoring. In "all" mode every sourced turn is echoed; in
     /// a single-agent mode only that agent's replies show.
     private func routeSpeechBubble(_ snapshot: CodexActivitySnapshot) {
+        // A live Migi voice line owns the bubble for a few seconds; routine
+        // echo traffic resumes right after instead of talking over it.
+        guard Date() >= voiceLineHoldUntil else { return }
         guard speechBubblesEnabled else {
             if let revision = snapshot.spokenRevision {
                 suppressedSpeechRevision = revision
@@ -560,6 +595,163 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshSpeechBubblesMenu() {
         speechBubblesMenuItem?.state = speechBubblesEnabled ? .on : .off
+    }
+
+    @objc private func toggleMigiVoice(_ sender: NSMenuItem) {
+        UserDefaults.standard.set(
+            !migiVoiceEnabled,
+            forKey: Self.migiVoicePreferenceKey
+        )
+        refreshMigiVoiceMenu()
+    }
+
+    private func refreshMigiVoiceMenu() {
+        migiVoiceMenuItem?.state = migiVoiceEnabled ? .on : .off
+    }
+
+    private var migiVoiceEnabled: Bool {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.migiVoicePreferenceKey) == nil {
+            return true
+        }
+        return defaults.bool(forKey: Self.migiVoicePreferenceKey)
+    }
+
+    // MARK: - Migi voice lines (canon, hardcoded, sparse)
+
+    /// Frame-driven low-frequency beats. Every line is a fixed local string on
+    /// a rare rising edge — nothing is generated,and each kind owns a cooldown
+    /// so the discipline is silence by default.
+    private func observeBehaviorFrame(_ frame: MigiBehaviorFrame) {
+        defer {
+            lastWakePhaseSeen = frame.wakePhase
+            lastRelationshipStageSeen = frame.relationshipStage
+        }
+        guard migiVoiceEnabled,
+              speechBubblesEnabled,
+              overlayController?.isDemoModeEnabled == false
+        else {
+            return
+        }
+
+        if frame.wakePhase == .deepSleep, lastWakePhaseSeen != .deepSleep {
+            emitVoiceLine(
+                "我要睡了。这段时间里，什么也叫不醒我。",
+                cooldown: 40 * 60,
+                lastEmittedAt: &lastSleepVoiceLineAt
+            )
+        }
+
+        if frame.microAction == .protectiveShield {
+            emitVoiceLine(
+                "防御，正是我的专长。",
+                cooldown: 90,
+                lastEmittedAt: &lastThreatVoiceLineAt
+            )
+        }
+
+        if frame.relationshipStage == .protective,
+           lastRelationshipStageSeen != nil,
+           lastRelationshipStageSeen != .protective,
+           !UserDefaults.standard.bool(forKey: Self.protectiveBondAnnouncedKey)
+        {
+            UserDefaults.standard.set(
+                true,
+                forKey: Self.protectiveBondAnnouncedKey
+            )
+            emitVoiceLineOnce(
+                "……我开始习惯和你一起工作了。你的安危，我会放在更前面。"
+            )
+        }
+    }
+
+    private func emitVoiceLine(
+        _ text: String,
+        cooldown: TimeInterval = 0,
+        lastEmittedAt: inout Date
+    ) {
+        let now = Date()
+        if now.timeIntervalSince(lastEmittedAt) < cooldown {
+            return
+        }
+        lastEmittedAt = now
+        voiceLineHoldUntil = now.addingTimeInterval(5)
+        overlayController?.showSpeech(text, revision: nil)
+    }
+
+    private func emitVoiceLineOnce(_ text: String) {
+        voiceLineHoldUntil = Date().addingTimeInterval(5)
+        overlayController?.showSpeech(text, revision: nil)
+    }
+
+    // MARK: - Canon sleep ledger
+
+    private struct MigiSleepLedger: Codable {
+        static let currentVersion = 1
+        var version = currentVersion
+        var fatigue: Double = 0
+        var savedAt: Date?
+    }
+
+    private var sleepLedgerURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex/migi-advanced", isDirectory: true)
+            .appendingPathComponent("sleep-v1.json")
+    }
+
+    private func restoreSleepLedger() {
+        guard let data = try? Data(contentsOf: sleepLedgerURL),
+              let ledger = try? JSONDecoder().decode(
+                  MigiSleepLedger.self,
+                  from: data
+              ),
+              ledger.version == MigiSleepLedger.currentVersion
+        else {
+            return
+        }
+        var restored = min(max(ledger.fatigue.isFinite ? ledger.fatigue : 0, 0), 1)
+        if let savedAt = ledger.savedAt {
+            // Time spent fully switched off rests Migi: six offline hours
+            // clear a full debt.
+            let offSeconds = max(Date().timeIntervalSince(savedAt), 0)
+            restored = max(0, restored * (1 - offSeconds / (6 * 3600)))
+        }
+        overlayController?.restoreFatigue(restored)
+        lastPersistedFatigue = restored
+    }
+
+    private func startSleepLedgerPersistence() {
+        sleepLedgerTimer = Timer.scheduledTimer(
+            withTimeInterval: 30,
+            repeats: true
+        ) { [weak self] _ in
+            self?.persistSleepLedgerIfNeeded(force: false)
+        }
+    }
+
+    private func persistSleepLedgerIfNeeded(force: Bool) {
+        guard let overlayController else { return }
+        let fatigue = overlayController.currentFatigue
+        guard force || abs(fatigue - lastPersistedFatigue) >= 0.02 else {
+            return
+        }
+
+        var ledger = MigiSleepLedger()
+        ledger.fatigue = fatigue
+        ledger.savedAt = Date()
+        let url = sleepLedgerURL
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            try encoder.encode(ledger).write(to: url, options: .atomic)
+            lastPersistedFatigue = fatigue
+        } catch {
+            // Persistence is best-effort; the next poll retries.
+        }
     }
 
     private func refreshFailureNotificationsMenu() {

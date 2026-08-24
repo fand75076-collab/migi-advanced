@@ -18,6 +18,18 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private static let authoredFrameHandoffDuration: TimeInterval = 0.085
     private static let hoverDwellDuration: TimeInterval = 0.30
     private static let hoverReleaseDuration: TimeInterval = 0.20
+    /// Trailing eyes close a beat behind the leading eye instead of every
+    /// visible eye blinking in lockstep.
+    private static let blinkStaggerPerEye: TimeInterval = 0.045
+    /// Seconds per second used to ease between converged and split gaze.
+    private static let gazeConvergenceResponse: Double = 2.6
+    /// Ambient split gaze would make deterministic QA captures
+    /// non-reproducible, so QA runs keep every eye converged.
+    private static let isDeterministicQARun = CommandLine.arguments.contains {
+        $0 == "--demo"
+            || $0.hasPrefix("--demo-state=")
+            || $0.hasPrefix("--qa-")
+    }
 
     var onBehaviorFrame: ((MigiBehaviorFrame) -> Void)?
     var onManualWindowMove: ((CGPoint, Bool) -> Void)?
@@ -28,11 +40,17 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private let colorPipeline: MTLRenderPipelineState
     private let spriteTexture: MTLTexture
     private let atlas: V4AtlasManifest
-    private let behavior = MigiFullSpriteView.makeRuntimeBehavior()
+    private let behavior = MigiFullSpriteView.configureBehavior(
+        MigiFullSpriteView.makeRuntimeBehavior()
+    )
 
     private var lastDrawTime = ProcessInfo.processInfo.systemUptime
     private var gaze = SIMD2<Double>(0, 0)
     private var gazeVelocity = SIMD2<Double>(0, 0)
+    /// 1 = every eye tracks the shared pointer target; 0 = canon split gaze
+    /// where branch eyes autonomously scan their own sectors.
+    private var gazeConvergence: Double = 1
+    private var activeAgentCount = 1
     private var eyeTrackingStates: [String: V4EyeTrackingState] = [:]
     private var blinkStartedAt: TimeInterval?
     private var blinkReleaseStartedAt: TimeInterval?
@@ -88,6 +106,16 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private var hoverAttentionIsActive = false
     private var forcedHoverAttention: Bool?
     private var pendingQAInteractionAfterDemoSetup = false
+    /// Sustained pointer dwell past this count earns the canon stare-back.
+    private static let stareDwellDuration: TimeInterval = 3.0
+    private var stareSent = false
+    /// 0...1 rising while the user physically manhandles the panel.
+    private var dragDispleasure: CGFloat = 0
+    /// Latest controller-provided sleep-debt pressure, kept for deformation.
+    private var currentFatigue: CGFloat = 0
+    /// True while Migi reads a book pose: branch eyes stop tracking the
+    /// pointer and sweep the page line by line instead.
+    private var readingScanActive = false
 
     var isDemoModeEnabled: Bool { demoMode }
     override var isOpaque: Bool { false }
@@ -112,6 +140,13 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             seed: seed,
             initialFacing: initialFacing
         )
+    }
+
+    private static func configureBehavior(
+        _ controller: MigiBehaviorController
+    ) -> MigiBehaviorController {
+        controller.allowsWorkPoseBlinks = !Self.isDeterministicQARun
+        return controller
     }
 
     override init(frame frameRect: NSRect, device: MTLDevice?) {
@@ -184,6 +219,11 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         }
     }
 
+    /// Restores the persisted canon sleep debt at launch (clamped 0...1).
+    func restoreFatigue(_ value: Double) {
+        behavior.restoreFatigue(value)
+    }
+
     func setDemoMode(_ enabled: Bool, fixedActivity: CodexActivity? = nil) {
         demoMode = enabled
         forcedWakePhase = nil
@@ -194,9 +234,12 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         demoStartTime = nil
         lastDemoIndex = -1
         if enabled, let fixedActivity {
-            behavior.force(demoSnapshot(for: fixedActivity))
+            behavior.force(
+                demoSnapshot(for: fixedActivity),
+                resetFatigue: Self.isDeterministicQARun
+            )
         } else if !enabled {
-            behavior.force(latestLiveSnapshot)
+            behavior.force(latestLiveSnapshot, resetFatigue: Self.isDeterministicQARun)
         }
     }
 
@@ -267,7 +310,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         // much smaller silhouette looks like a scale pop. Deep sleep itself
         // remains idle so it can be held indefinitely for capture.
         let targetActivity: CodexActivity = phase == .deepSleep ? .idle : .thinking
-        behavior.force(demoSnapshot(for: targetActivity))
+        behavior.force(
+            demoSnapshot(for: targetActivity),
+            resetFatigue: Self.isDeterministicQARun
+        )
         behavior.forceWakePhaseForQA(phase)
     }
 
@@ -287,7 +333,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         lastRequestedMirroring = nil
         activeTurnPlayback = nil
         behavior.force(
-            qaAgentTransitionSnapshot(for: transition, afterTransition: false)
+            qaAgentTransitionSnapshot(for: transition, afterTransition: false),
+            resetFatigue: Self.isDeterministicQARun
         )
     }
 
@@ -360,6 +407,35 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                     behavior: behaviorFrame
                 )
             }
+
+            // Attention, sleep phases, forced QA gaze, and deterministic QA
+            // runs converge every eye onto the pointer target; otherwise
+            // branch eyes drift into their own slow scan. Being physically
+            // dragged converges everything as well — Migi watches the hand
+            // that holds it.
+            activeAgentCount = behaviorFrame.activeAgentCount
+            currentFatigue = behaviorFrame.fatigue
+            readingScanActive =
+                behaviorFrame.microAction == .read
+                && behaviorFrame.prop == .book
+                && behaviorFrame.wakePhase == .awake
+                && !Self.isDeterministicQARun
+            let dragTarget: CGFloat =
+                (dragStartMouse != nil && pointerGesture.didDrag) ? 1 : 0
+            let dragBlend = CGFloat(1 - exp(-deltaTime * 8))
+            dragDispleasure += (dragTarget - dragDispleasure) * dragBlend
+            let wantsConvergedGaze =
+                forcedGazeTarget != nil
+                || behaviorFrame.suppressesPointerGaze
+                || behaviorFrame.isUserAttentionActive
+                || hoverAttentionIsActive
+                || dragDispleasure > 0.25
+                || Self.isDeterministicQARun
+            let convergenceStep =
+                1 - exp(-deltaTime * Self.gazeConvergenceResponse)
+            gazeConvergence +=
+                ((wantsConvergedGaze ? 1.0 : 0.0) - gazeConvergence)
+                * convergenceStep
 
             let selection = selectSprite(for: behaviorFrame, time: now)
             updateWakeHandoff(
@@ -571,7 +647,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             let index = activities.firstIndex(of: fixedDemoActivity) ?? 0
             guard index != lastDemoIndex else { return }
             lastDemoIndex = index
-            behavior.force(demoSnapshot(for: fixedDemoActivity))
+            behavior.force(
+                demoSnapshot(for: fixedDemoActivity),
+                resetFatigue: Self.isDeterministicQARun
+            )
             consumePendingQAInteractionAfterDemoSetup()
             return
         }
@@ -580,7 +659,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         let index = Int(elapsed / demoStateDuration) % activities.count
         guard index != lastDemoIndex else { return }
         lastDemoIndex = index
-        behavior.force(demoSnapshot(for: activities[index]))
+        behavior.force(
+            demoSnapshot(for: activities[index]),
+            resetFatigue: Self.isDeterministicQARun
+        )
         consumePendingQAInteractionAfterDemoSetup()
     }
 
@@ -688,6 +770,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         if let forcedHoverAttention {
             hoverAttentionIsActive =
                 forcedHoverAttention && !behavior.suppressesPointerGaze
+            if !hoverAttentionIsActive, stareSent {
+                self.behavior.ingestStareAttention(nil)
+                stareSent = false
+            }
             return
         }
 
@@ -695,6 +781,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             pointerEnteredSpriteAt = nil
             hoverReleaseUntil = 0
             hoverAttentionIsActive = false
+            if stareSent {
+                self.behavior.ingestStareAttention(nil)
+                stareSent = false
+            }
             return
         }
 
@@ -705,11 +795,21 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             if pointerEnteredSpriteAt == nil {
                 pointerEnteredSpriteAt = time
             }
-            if time - (pointerEnteredSpriteAt ?? time)
-                    >= Self.hoverDwellDuration
-            {
+            let dwell = time - (pointerEnteredSpriteAt ?? time)
+            if dwell >= Self.hoverDwellDuration {
                 hoverAttentionIsActive = true
                 hoverReleaseUntil = 0
+            }
+            if !stareSent,
+               dwell >= Self.stareDwellDuration,
+               !Self.isDeterministicQARun
+            {
+                // Canon beat: held eye contact earns one deliberate turn
+                // toward the watcher. The controller owns cooldown/phase gating.
+                stareSent = true
+                self.behavior.ingestStareAttention(
+                    stareDirectionForCurrentPointer()
+                )
             }
             return
         }
@@ -719,6 +819,17 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             hoverReleaseUntil = time + Self.hoverReleaseDuration
         }
         hoverAttentionIsActive = time < hoverReleaseUntil
+
+        if !hoverAttentionIsActive, stareSent {
+            self.behavior.ingestStareAttention(nil)
+            stareSent = false
+        }
+    }
+
+    private func stareDirectionForCurrentPointer() -> CGFloat {
+        guard let window else { return 1 }
+        let centerX = window.frame.midX
+        return NSEvent.mouseLocation.x < centerX ? -1 : 1
     }
 
     private func isPointOverInteractiveSprite(
@@ -1083,9 +1194,19 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         case .phone:
             return selection(named: "phone", time: time, mirrored: requestedMirroring)
         case .laptop:
-            return selection(named: "laptop", time: time, mirrored: requestedMirroring)
+            return selection(
+                named: "laptop",
+                time: time,
+                mirrored: requestedMirroring,
+                playbackRate: frame.clipPlaybackRate
+            )
         case .book:
-            return selection(named: "book", time: time, mirrored: requestedMirroring)
+            return selection(
+                named: "book",
+                time: time,
+                mirrored: requestedMirroring,
+                playbackRate: frame.clipPlaybackRate
+            )
         case .none:
             break
         }
@@ -1093,10 +1214,12 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         let microActionClip: String?
         switch frame.microAction {
         case .inspectHand:
+            // Self-check owns its authored clip; palm-observer remains the
+            // fallback for atlases that predate it.
             microActionClip =
-                atlas.clips["palm-observer"] != nil
-                    ? "palm-observer"
-                    : "inspect-hand"
+                atlas.clips["inspect-hand"] != nil
+                    ? "inspect-hand"
+                    : "palm-observer"
         case .palmObserver:
             microActionClip =
                 atlas.clips["palm-observer"] != nil
@@ -1141,7 +1264,9 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 atlas.clips["calm-diagnosis"] != nil
                     ? "calm-diagnosis"
                     : "logic-count"
-        case .detachedScoutReturn:
+        case .detachedScoutReturn, .subAgentScout:
+            // 共享同一条离体侦察—回归原画;子代理版本由控制器的 60 秒冷却
+            // 保证稀有度,与待机巡游的必然回归语义一致。
             microActionClip =
                 atlas.clips["detached-scout-return"] != nil
                     ? "detached-scout-return"
@@ -1850,7 +1975,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
 
         reusableSpriteMesh.vertices.removeAll(keepingCapacity: true)
         reusableEyeMesh.vertices.removeAll(keepingCapacity: true)
-        let blink = blinkAmount(for: behavior, time: time)
+        updateBlinkState(for: behavior, time: time)
 
         let activeHandoff =
             wakeHandoff ?? ordinaryHandoff ?? authoredFrameHandoff
@@ -1932,7 +2057,6 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 phase: phase,
                 deltaTime: deltaTime,
                 behavior: behavior,
-                blink: blink,
                 transition: nil,
                 transitionRootAxis: Self.transitionRootAxis(
                     named: eyeSelection.clipName
@@ -1959,7 +2083,6 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 phase: phase,
                 deltaTime: deltaTime,
                 behavior: behavior,
-                blink: blink,
                 transition: nil,
                 transitionRootAxis: transitionRootAxis,
                 trackingNamespace: nil
@@ -1999,7 +2122,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 for: selection,
                 behavior: behavior,
                 tuning: tuning
-            ),
+            ) * organicMotionScale,
             deformationProfile: selection.deformationProfile,
             motionTuning: tuning,
             transition: transition,
@@ -2014,7 +2137,6 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         phase: CGFloat,
         deltaTime: TimeInterval,
         behavior: MigiBehaviorFrame,
-        blink: CGFloat,
         transition: MigiTissueTransition?,
         transitionRootAxis: V4TransitionRootAxis,
         trackingNamespace: String?
@@ -2033,10 +2155,11 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             for: selection,
             behavior: behavior,
             tuning: tuning
-        )
+        ) * organicMotionScale
         let trackedGazes = updateTrackedEyeGazes(
             for: selection.eyeAnchors,
             deltaTime: deltaTime,
+            time: phase,
             namespace: trackingNamespace
         )
         for (index, anchor) in selection.eyeAnchors.enumerated() {
@@ -2085,12 +2208,22 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                     x: tissueOffset.x + transitionOffset.x,
                     y: tissueOffset.y + transitionOffset.y
                 ),
-                blink: blink,
-                alpha: visibility,
+                blink: blinkCurve(
+                    for: behavior,
+                    time:
+                        phase
+                        - Double(min(index, 3)) * Self.blinkStaggerPerEye
+                ),
                 organScale: 0.52 + 0.48 * sqrt(visibility),
                 mesh: &reusableEyeMesh
             )
         }
+    }
+
+    /// Tissue calm scales: being held suppresses fidget; accumulated sleep
+    /// debt lowers overall amplitude. Neither touches authored identity.
+    private var organicMotionScale: CGFloat {
+        (1 - 0.25 * dragDispleasure) * (1 - 0.20 * currentFatigue)
     }
 
     private func deformationAmount(
@@ -2116,6 +2249,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private func updateTrackedEyeGazes(
         for anchors: [V4EyeAnchor],
         deltaTime: TimeInterval,
+        time: TimeInterval,
         namespace: String? = nil
     ) -> [SIMD2<Double>] {
         anchors.enumerated().map { index, anchor in
@@ -2124,10 +2258,33 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             let defaultGain: CGFloat = index == 0 ? 1 : max(0.56, 0.78 - CGFloat(index - 1) * 0.10)
             let horizontalGain = anchor.trackingGain ?? defaultGain
             let verticalGain = anchor.verticalGain ?? min(horizontalGain + 0.06, 1)
-            let target = SIMD2<Double>(
+            let cursorTarget = SIMD2<Double>(
                 gaze.x * Double(horizontalGain),
                 gaze.y * Double(verticalGain)
             )
+            let target: SIMD2<Double>
+            if index == 0 || gazeConvergence >= 0.999 {
+                // The primary eye never leaves the pointer; attention cues,
+                // sleep phases and deterministic QA keep every eye converged.
+                target = cursorTarget
+            } else {
+                let scanTarget: SIMD2<Double>
+                if readingScanActive {
+                    // Reading Migi sweeps lines, not the mouse: a canon page
+                    // scan with per-eye staggered rhythm and saccade return.
+                    scanTarget = readingScanTarget(index: index, time: time)
+                } else {
+                    scanTarget = autonomousScanTarget(
+                        namespace: namespace,
+                        baseKey: baseKey,
+                        index: index,
+                        time: time
+                    )
+                }
+                target =
+                    cursorTarget * gazeConvergence
+                    + scanTarget * (1 - gazeConvergence)
+            }
             var state =
                 eyeTrackingStates[key]
                     ?? V4EyeTrackingState(value: target, velocity: .zero)
@@ -2149,30 +2306,93 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         }
     }
 
-    private func blinkAmount(
+    /// Line-by-line page sweep for reading poses. Each branch eye keeps its
+    /// own rhythm; the last 12% of every line is the saccade back to the
+    /// start of the next one.
+    private func readingScanTarget(index: Int, time: TimeInterval) -> SIMD2<Double> {
+        let phase = Double(index - 1) * 0.35
+        let t = time + phase
+        let linePeriod: TimeInterval = 1.9
+        let lineCount = 4
+        let raw = t / linePeriod
+        let lineIndex = Double(Int(floor(raw)) % lineCount)
+        let frac = raw - floor(raw)
+        let sweep = frac < 0.88 ? frac / 0.88 : 0
+        let eased = sweep * sweep * (3 - 2 * sweep)
+        let x = -0.52 + 1.04 * eased
+        let y = 0.10 - lineIndex * 0.09
+        return SIMD2<Double>(x, y)
+    }
+
+    /// branch eye slowly sweeps its own sector. Motion is a layered,
+    /// low-frequency wander driven by a stable per-eye phase; parallel agent
+    /// work fans branch eyes toward distinct sectors, the way Migi divides
+    /// attention across multiple threats.
+    private func autonomousScanTarget(
+        namespace: String?,
+        baseKey: String,
+        index: Int,
+        time: TimeInterval
+    ) -> SIMD2<Double> {
+        // Stable FNV-1a hash keeps per-eye phases deterministic without
+        // depending on Swift's per-process `hashValue` randomization.
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in ((namespace ?? "") + "/" + baseKey).utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x0000_0100_0000_01b3
+        }
+        let phaseH = Double(hash & 0xFFFF) / 65535 * .pi * 2
+        let phaseV = Double((hash >> 16) & 0xFFFF) / 65535 * .pi * 2
+        var scanX =
+            0.34 * sin(time * 0.21 + phaseH)
+            + 0.14 * sin(time * 0.53 + phaseV)
+        var scanY =
+            0.26 * sin(time * 0.17 + phaseV * 1.7 + 1.1)
+            + 0.11 * cos(time * 0.43 + phaseH * 0.6)
+        if activeAgentCount > 1 {
+            let side = index % 2 == 0 ? -1.0 : 1.0
+            let tier = Double(index / 2)
+            scanX += side * (0.16 + 0.10 * tier)
+            scanY += 0.05 * tier - 0.03
+        }
+        var target = SIMD2<Double>(scanX, scanY)
+        let length = simd_length(target)
+        if length > 0.8 {
+            target *= 0.8 / length
+        }
+        return target
+    }
+
+    /// Advances blink bookkeeping once per frame with unshifted time. A new
+    /// blink always re-anchors both timestamps so the curve restarts clean.
+    private func updateBlinkState(
         for behavior: MigiBehaviorFrame,
         time: TimeInterval
-    ) -> CGFloat {
-        if behavior.microAction == .blink {
-            if blinkStartedAt == nil {
+    ) {
+        if behavior.blinkWanted {
+            if blinkStartedAt == nil || blinkReleaseStartedAt != nil {
                 blinkStartedAt = time
             }
             blinkReleaseStartedAt = nil
-            let elapsed = max(time - (blinkStartedAt ?? time), 0)
-            return Self.smoothStep(CGFloat(min(elapsed / 0.055, 1)))
-        }
-
-        guard blinkStartedAt != nil else { return 0 }
-        if blinkReleaseStartedAt == nil {
+        } else if blinkStartedAt != nil, blinkReleaseStartedAt == nil {
             blinkReleaseStartedAt = time
         }
-        let elapsed = max(time - (blinkReleaseStartedAt ?? time), 0)
-        let progress = CGFloat(min(elapsed / 0.085, 1))
-        if progress >= 1 {
-            blinkStartedAt = nil
-            blinkReleaseStartedAt = nil
-            return 0
+    }
+
+    /// Pure blink-curve sample; callers shift `time` by an eye's stagger
+    /// offset. Canon blinks are slow and deliberate rather than conversational.
+    private func blinkCurve(
+        for behavior: MigiBehaviorFrame,
+        time: TimeInterval
+    ) -> CGFloat {
+        if behavior.blinkWanted {
+            guard let startedAt = blinkStartedAt else { return 0 }
+            let elapsed = max(time - startedAt, 0)
+            return Self.smoothStep(CGFloat(min(elapsed / 0.09, 1)))
         }
+        guard let releaseStartedAt = blinkReleaseStartedAt else { return 0 }
+        let progress = CGFloat(min(max(time - releaseStartedAt, 0) / 0.15, 1))
+        if progress >= 1 { return 0 }
         return 1 - Self.smoothStep(progress)
     }
 
@@ -2203,7 +2423,12 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         let sourceRadius =
             anchor.radius * min(spriteSize.width, spriteSize.height)
                 * min(max(organScale, 0.35), 1)
-        let whiteRadius = sourceRadius * 0.82
+        // The white must fully cover the authored eyeball in the atlas frame;
+        // otherwise the painted iris underneath leaks past the procedural
+        // overlay at the rim. Socket shading stays outside this radius.
+        let whiteRadius = sourceRadius * 0.94
+        // Being dragged narrows the eye slightly — tolerated, and noted.
+        let pupilPinch = 1 - 0.15 * dragDispleasure
         let gazeOffset = CGPoint(
             x: CGFloat(gaze.x) * sourceRadius * 0.36,
             y: CGFloat(gaze.y) * sourceRadius * 0.36
@@ -2220,45 +2445,25 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             color: .eyeWhite.withAlphaMultiplier(alpha),
             segments: 32
         )
+        // Canon eyes are a plain dark disc on white — no colored iris, no
+        // glossy cartoon sparkle. One faint static fleck keeps the surface
+        // readable at small sizes without softening the stare.
+        let pupilRadius = sourceRadius * 0.44 * pupilPinch
         mesh.addEllipse(
             center: irisCenter,
-            rx: sourceRadius * 0.49,
-            ry: sourceRadius * 0.49,
-            color: .irisDark.withAlphaMultiplier(alpha),
-            segments: 28
-        )
-        mesh.addEllipse(
-            center: irisCenter,
-            rx: sourceRadius * 0.40,
-            ry: sourceRadius * 0.40,
-            color: .iris.withAlphaMultiplier(alpha),
-            segments: 28
-        )
-        mesh.addEllipse(
-            center: irisCenter,
-            rx: sourceRadius * 0.20,
-            ry: sourceRadius * 0.20,
+            rx: pupilRadius,
+            ry: pupilRadius,
             color: .pupil.withAlphaMultiplier(alpha),
-            segments: 24
+            segments: 28
         )
         mesh.addEllipse(
             center: CGPoint(
-                x: irisCenter.x - sourceRadius * 0.13,
-                y: irisCenter.y + sourceRadius * 0.14
+                x: irisCenter.x - sourceRadius * 0.10,
+                y: irisCenter.y + sourceRadius * 0.11
             ),
-            rx: sourceRadius * 0.095,
-            ry: sourceRadius * 0.095,
-            color: .highlight.withAlphaMultiplier(alpha),
-            segments: 16
-        )
-        mesh.addEllipse(
-            center: CGPoint(
-                x: irisCenter.x + sourceRadius * 0.09,
-                y: irisCenter.y + sourceRadius * 0.06
-            ),
-            rx: sourceRadius * 0.045,
-            ry: sourceRadius * 0.045,
-            color: .highlight.withAlphaMultiplier(alpha),
+            rx: sourceRadius * 0.05,
+            ry: sourceRadius * 0.05,
+            color: .highlight.withAlphaMultiplier(alpha * 0.85),
             segments: 12
         )
 
@@ -3468,8 +3673,6 @@ private struct FullRGBA {
     }
 
     static let eyeWhite = FullRGBA(r: 0.98, g: 0.97, b: 0.91, a: 1)
-    static let irisDark = FullRGBA(r: 0.30, g: 0.27, b: 0.055, a: 1)
-    static let iris = FullRGBA(r: 0.61, g: 0.57, b: 0.12, a: 1)
     static let pupil = FullRGBA(r: 0.025, g: 0.022, b: 0.016, a: 1)
     static let highlight = FullRGBA(r: 1, g: 1, b: 1, a: 1)
     static let eyelidFlesh = FullRGBA(r: 0.91, g: 0.74, b: 0.50, a: 1)
