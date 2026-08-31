@@ -64,6 +64,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private var reusableSpriteMesh = FullSpriteMesh()
     private var reusableEyeMesh = FullColorMesh()
     private var spriteVertexBuffers: [MTLBuffer?] = [nil, nil, nil]
+    private var spriteIndexBuffers: [MTLBuffer?] = [nil, nil, nil]
     private var eyeVertexBuffers: [MTLBuffer?] = [nil, nil, nil]
     private var forcedGazeTarget: SIMD2<Double>?
     private var forcedClipName: String?
@@ -448,13 +449,9 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 selection: selection,
                 gazeIsChasing: gazeIsChasing
             )
-            let scene = makeScene(
-                selection: selection,
-                behavior: behaviorFrame,
-                time: now,
-                deltaTime: deltaTime
-            )
-
+            // Reserve the GPU slot and drawable before spending CPU on the
+            // deformed mesh; when the three in-flight buffers are still owned
+            // by submitted command buffers, the whole scene build is skipped.
             guard let bufferSlot = reserveBufferSlot() else {
                 return
             }
@@ -471,6 +468,13 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             else {
                 return
             }
+
+            let scene = makeScene(
+                selection: selection,
+                behavior: behaviorFrame,
+                time: now,
+                deltaTime: deltaTime
+            )
 
             guard let gpuScene = prepareGPUScene(scene, slot: bufferSlot),
                   let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor)
@@ -934,6 +938,15 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         selection: V4SpriteSelection,
         gazeIsChasing: Bool
     ) {
+        var highDetailMicroAction = false
+        switch frame.microAction {
+        case .rapidNotes, .fineMotor, .organDrift, .logicCount,
+             .signalSampling, .agentHandoff, .agentTurn:
+            highDetailMicroAction = true
+        default:
+            break
+        }
+
         let target: Int
         if dragStartMouse != nil {
             target = 60
@@ -948,9 +961,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             target = 30
         } else if frame.isMoving
                     || frame.activity == .failed
-                    || [.rapidNotes, .fineMotor, .organDrift, .logicCount,
-                        .signalSampling, .agentHandoff, .agentTurn]
-                        .contains(frame.microAction)
+                    || highDetailMicroAction
                     || (selection.pointerEyes && gazeIsChasing)
         {
             target = 60
@@ -1029,28 +1040,15 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             )
             activeClipStartedAt = max(activeClipStartedAt, time + duration)
         } else if wakeHandoff == nil,
-                  activeTurnPlayback != nil,
                   presentationChanged,
+                  activeTurnPlayback != nil || behavior.microAction == .agentTurn,
                   let previous = lastSpriteSelection
         {
-            // The authored planted turn owns its own clock. Give its first cell
-            // a very short tissue handoff without delaying or skipping the turn.
-            ordinaryHandoff = nil
-            authoredFrameHandoff = V4SpriteHandoff(
-                previous: previous,
-                startedAt: time,
-                duration: Self.authoredFrameHandoffDuration,
-                kind: .authoredFrame
-            )
-        } else if wakeHandoff == nil,
-                  behavior.microAction == .agentTurn,
-                  presentationChanged,
-                  let previous = lastSpriteSelection
-        {
-            // Agent handoff owns an explicit once-through turn clip. Give its
-            // first cell the same short tissue arrival as an automatic planted
-            // turn, but do not spend 0.36 s of its 1.01 s clock in a semantic
-            // transition or bind it to the next work clip's identity.
+            // Both the authored planted turn and the explicit agent-turn clip
+            // own their own once-through clocks. Give their first cell a very
+            // short tissue handoff without delaying or skipping the turn, and
+            // do not spend 0.36 s of its clock in a semantic transition or
+            // bind it to the next work clip's identity.
             ordinaryHandoff = nil
             authoredFrameHandoff = V4SpriteHandoff(
                 previous: previous,
@@ -1382,6 +1380,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             let turnElapsed = max(time - turn.startedAt, 0)
             let turnDuration = Self.oncePlaybackDuration(
                 for: turnClip,
+                clipName: turn.clipName,
                 playbackRate: turn.playbackRate
             )
             if turnElapsed < turnDuration {
@@ -1466,6 +1465,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         )
     }
 
+    private static let anatomicallyAnchoredClips: Set<String> = [
+        "normal-hand", "palm-observer", "complete-sleep",
+    ]
+
     private static func resolvedMirroring(
         for clip: V4Clip,
         named name: String,
@@ -1474,7 +1477,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         // These are specifically Shinichi's right-hand topology, not a generic
         // left/right mascot pose. Enforce the anatomical side even if an older
         // handoff manifest accidentally omits mirror_policy=never.
-        if ["normal-hand", "palm-observer", "complete-sleep"].contains(name) {
+        if Self.anatomicallyAnchoredClips.contains(name) {
             return false
         }
         switch clip.mirrorPolicy {
@@ -1564,21 +1567,142 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     ) -> Int {
         let frameCount = max(clip.frameCount, 1)
         guard frameCount > 1 else { return 0 }
-        let durations = frameDurations(for: clip, playbackRate: playbackRate)
+        let timeline = playbackTimeline(
+            for: clip,
+            clipName: clipName,
+            playbackRate: playbackRate,
+            forcedMode: forcedMode
+        )
+        return timeline.frame(at: elapsed)
+    }
+
+    private static func defaultPlaybackMode(named name: String) -> V4PlaybackMode {
+        // The canonical blade row already contains enter, peak and retract art.
+        // Play that authored action once instead of repeatedly reopening the
+        // tissue during one write event. Every other legacy clip keeps its
+        // original looping behavior unless the manifest opts in explicitly.
+        name == "sharpen-tip" ? .enterHoldRetract : .loop
+    }
+
+    /// A clip's frame sequence and timing only depend on (clip, mode, rate),
+    /// yet the render loop re-derived them every frame. Timelines are cached
+    /// per quantized rate; canon and QA rates (1, 1.25, 0.75, 1.4) quantize
+    /// exactly, so deterministic captures are unaffected.
+    private struct V4PlaybackTimeline {
+        var prefixSequence: [Int] = []
+        var prefixDurations: [TimeInterval] = []
+        var cycleSequence: [Int] = []
+        var cycleDurations: [TimeInterval] = []
+        var repeats: Bool
+        var prefixDuration: TimeInterval = 0
+        var fixedFrame: Int?
+
+        func frame(at elapsed: TimeInterval) -> Int {
+            if let fixedFrame { return fixedFrame }
+            guard !cycleSequence.isEmpty,
+                  cycleSequence.count == cycleDurations.count
+            else {
+                return 0
+            }
+            let safeElapsed = max(elapsed.isFinite ? elapsed : 0, 0)
+            var cursor = safeElapsed
+            if prefixDuration > 0 {
+                if cursor < prefixDuration {
+                    return frameForSequence(
+                        prefixSequence,
+                        explicitDurations: prefixDurations,
+                        elapsed: cursor,
+                        repeats: false
+                    )
+                }
+                cursor -= prefixDuration
+            }
+            return frameForSequence(
+                cycleSequence,
+                explicitDurations: cycleDurations,
+                elapsed: cursor,
+                repeats: repeats
+            )
+        }
+    }
+
+    private static var playbackTimelineCache: [String: V4PlaybackTimeline] = [:]
+    private static var frameDurationCache: [String: [TimeInterval]] = [:]
+
+    private static func quantizedPlaybackRate(_ rate: Double) -> Double {
+        let safeRate = max(rate.isFinite ? rate : 1, 0.05)
+        return (safeRate * 20).rounded() / 20
+    }
+
+    private static func frameDurations(
+        for clip: V4Clip,
+        clipName: String,
+        playbackRate: Double
+    ) -> [TimeInterval] {
+        let key = "\(clipName)#\(quantizedPlaybackRate(playbackRate))"
+        if let cached = frameDurationCache[key] { return cached }
+        let safeRate = quantizedPlaybackRate(playbackRate)
+        let authored =
+            clip.frameDurations?.count == clip.frameCount
+                ? clip.frameDurations ?? []
+                : Array(repeating: clip.frameDuration, count: clip.frameCount)
+        let durations = authored.map {
+            max(($0.isFinite ? $0 : clip.frameDuration) / safeRate, 0.01)
+        }
+        frameDurationCache[key] = durations
+        return durations
+    }
+
+    private static func playbackTimeline(
+        for clip: V4Clip,
+        clipName: String,
+        playbackRate: Double,
+        forcedMode: V4PlaybackMode?
+    ) -> V4PlaybackTimeline {
         let mode =
             forcedMode
                 ?? clip.playbackMode
                 ?? defaultPlaybackMode(named: clipName)
-        let safeElapsed = max(elapsed.isFinite ? elapsed : 0, 0)
+        let key = "\(clipName)#\(mode)#\(quantizedPlaybackRate(playbackRate))"
+        if let cached = playbackTimelineCache[key] { return cached }
+        let timeline = buildPlaybackTimeline(
+            for: clip,
+            clipName: clipName,
+            mode: mode,
+            playbackRate: playbackRate
+        )
+        playbackTimelineCache[key] = timeline
+        return timeline
+    }
+
+    private static func buildPlaybackTimeline(
+        for clip: V4Clip,
+        clipName: String,
+        mode: V4PlaybackMode,
+        playbackRate: Double
+    ) -> V4PlaybackTimeline {
+        let frameCount = max(clip.frameCount, 1)
+        let durations = frameDurations(
+            for: clip,
+            clipName: clipName,
+            playbackRate: playbackRate
+        )
 
         switch mode {
         case .hold:
-            return min(max(clip.holdFrame ?? frameCount - 1, 0), frameCount - 1)
+            return V4PlaybackTimeline(
+                cycleSequence: [],
+                cycleDurations: [],
+                repeats: false,
+                fixedFrame: min(
+                    max(clip.holdFrame ?? frameCount - 1, 0),
+                    frameCount - 1
+                )
+            )
         case .once:
-            return frameForSequence(
-                Array(0..<frameCount),
-                durations: durations,
-                elapsed: safeElapsed,
+            return V4PlaybackTimeline(
+                cycleSequence: Array(0..<frameCount),
+                cycleDurations: durations,
                 repeats: false
             )
         case .pingPong:
@@ -1586,10 +1710,9 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             if frameCount > 2 {
                 sequence.append(contentsOf: stride(from: frameCount - 2, through: 1, by: -1))
             }
-            return frameForSequence(
-                sequence,
-                durations: durations,
-                elapsed: safeElapsed,
+            return V4PlaybackTimeline(
+                cycleSequence: sequence,
+                cycleDurations: sequence.map { durations[$0] },
                 repeats: true
             )
         case .enterHoldRetract:
@@ -1614,10 +1737,9 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                     contentsOf: durations[(holdFrame + 1)..<frameCount]
                 )
             }
-            return frameForSequence(
-                sequence,
-                explicitDurations: sequenceDurations,
-                elapsed: safeElapsed,
+            return V4PlaybackTimeline(
+                cycleSequence: sequence,
+                cycleDurations: sequenceDurations,
                 repeats: false
             )
         case .loop:
@@ -1628,63 +1750,40 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 let end = min(max(range[1], start), frameCount - 1)
                 if start > 0 {
                     let prefix = Array(0..<start)
-                    let prefixDuration = prefix.reduce(0) { $0 + durations[$1] }
-                    if safeElapsed < prefixDuration {
-                        return frameForSequence(
-                            prefix,
-                            durations: durations,
-                            elapsed: safeElapsed,
-                            repeats: false
-                        )
-                    }
-                    return frameForSequence(
-                        Array(start...end),
-                        durations: durations,
-                        elapsed: safeElapsed - prefixDuration,
-                        repeats: true
+                    let prefixDurations = prefix.map { durations[$0] }
+                    return V4PlaybackTimeline(
+                        prefixSequence: prefix,
+                        prefixDurations: prefixDurations,
+                        cycleSequence: Array(start...end),
+                        cycleDurations: (start...end).map { durations[$0] },
+                        repeats: true,
+                        prefixDuration: prefixDurations.reduce(0, +)
                     )
                 }
-                return frameForSequence(
-                    Array(start...end),
-                    durations: durations,
-                    elapsed: safeElapsed,
+                return V4PlaybackTimeline(
+                    cycleSequence: Array(start...end),
+                    cycleDurations: (start...end).map { durations[$0] },
                     repeats: true
                 )
             }
-            return frameForSequence(
-                Array(0..<frameCount),
-                durations: durations,
-                elapsed: safeElapsed,
+            return V4PlaybackTimeline(
+                cycleSequence: Array(0..<frameCount),
+                cycleDurations: durations,
                 repeats: true
             )
         }
     }
 
-    private static func defaultPlaybackMode(named name: String) -> V4PlaybackMode {
-        // The canonical blade row already contains enter, peak and retract art.
-        // Play that authored action once instead of repeatedly reopening the
-        // tissue during one write event. Every other legacy clip keeps its
-        // original looping behavior unless the manifest opts in explicitly.
-        name == "sharpen-tip" ? .enterHoldRetract : .loop
-    }
-
-    private static func frameDurations(
-        for clip: V4Clip,
-        playbackRate: Double
-    ) -> [TimeInterval] {
-        let safeRate = max(playbackRate.isFinite ? playbackRate : 1, 0.05)
-        let authored =
-            clip.frameDurations?.count == clip.frameCount
-                ? clip.frameDurations ?? []
-                : Array(repeating: clip.frameDuration, count: clip.frameCount)
-        return authored.map { max(($0.isFinite ? $0 : clip.frameDuration) / safeRate, 0.01) }
-    }
-
     private static func oncePlaybackDuration(
         for clip: V4Clip,
+        clipName: String,
         playbackRate: Double
     ) -> TimeInterval {
-        frameDurations(for: clip, playbackRate: playbackRate).reduce(0, +)
+        frameDurations(
+            for: clip,
+            clipName: clipName,
+            playbackRate: playbackRate
+        ).reduce(0, +)
     }
 
     private static func nonRepeatingPlaybackDuration(
@@ -1692,7 +1791,11 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         clipName: String,
         playbackRate: Double
     ) -> TimeInterval {
-        let base = oncePlaybackDuration(for: clip, playbackRate: playbackRate)
+        let base = oncePlaybackDuration(
+            for: clip,
+            clipName: clipName,
+            playbackRate: playbackRate
+        )
         let mode = clip.playbackMode ?? defaultPlaybackMode(named: clipName)
         guard mode == .enterHoldRetract else { return base }
         return base
@@ -1743,10 +1846,27 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         return sequence.last ?? first
     }
 
+    private static var propEyeAnchorTableCache: [String: [[V4EyeAnchor]]] = [:]
+
     private static func safePropEyeAnchors(
         named name: String,
         frame: Int
     ) -> [V4EyeAnchor] {
+        let table = propEyeAnchorTable(named: name)
+        guard table.indices.contains(frame) else { return [] }
+        return table[frame]
+    }
+
+    private static func propEyeAnchorTable(named name: String) -> [[V4EyeAnchor]] {
+        if let cached = propEyeAnchorTableCache[name] { return cached }
+        let table = buildPropEyeAnchorTable(named: name)
+        propEyeAnchorTableCache[name] = table
+        return table
+    }
+
+    private static func buildPropEyeAnchorTable(
+        named name: String
+    ) -> [[V4EyeAnchor]] {
         func eye(
             _ x: CGFloat,
             _ y: CGFloat,
@@ -1815,11 +1935,24 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         default:
             frames = []
         }
-        guard frames.indices.contains(frame) else { return [] }
-        return frames[frame]
+        return frames
     }
 
+    private static var deformationProfileCache: [String: V4DeformationProfile] = [:]
+
     private static func deformationProfile(
+        named name: String,
+        clip: V4Clip
+    ) -> V4DeformationProfile {
+        // The atlas is immutable after load, so a clip name uniquely resolves
+        // to one profile; cache it instead of rebuilding zone arrays per frame.
+        if let cached = deformationProfileCache[name] { return cached }
+        let profile = buildDeformationProfile(named: name, clip: clip)
+        deformationProfileCache[name] = profile
+        return profile
+    }
+
+    private static func buildDeformationProfile(
         named name: String,
         clip: V4Clip
     ) -> V4DeformationProfile {
@@ -1974,6 +2107,7 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         )
 
         reusableSpriteMesh.vertices.removeAll(keepingCapacity: true)
+        reusableSpriteMesh.indices.removeAll(keepingCapacity: true)
         reusableEyeMesh.vertices.removeAll(keepingCapacity: true)
         updateBlinkState(for: behavior, time: time)
 
@@ -1990,8 +2124,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                     1
                 )
             )
-            let baseTransitionTuning = MigiOrganicMotionTuning.preset(
-                for: selection.clipName,
+            let baseTransitionTuning = Self.organicTuning(
+                named: selection.clipName,
                 containsProp:
                     selection.containsProp
                         || activeHandoff.previous.containsProp
@@ -2096,6 +2230,27 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         )
     }
 
+    private struct OrganicTuningKey: Hashable {
+        let clipName: String
+        let containsProp: Bool
+    }
+
+    private static var organicTuningCache: [OrganicTuningKey: MigiOrganicMotionTuning] = [:]
+
+    private static func organicTuning(
+        named clipName: String,
+        containsProp: Bool
+    ) -> MigiOrganicMotionTuning {
+        let key = OrganicTuningKey(clipName: clipName, containsProp: containsProp)
+        if let cached = organicTuningCache[key] { return cached }
+        let tuning = MigiOrganicMotionTuning.preset(
+            for: clipName,
+            containsProp: containsProp
+        )
+        organicTuningCache[key] = tuning
+        return tuning
+    }
+
     private func appendSprite(
         _ selection: V4SpriteSelection,
         center: CGPoint,
@@ -2105,8 +2260,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         transition: MigiTissueTransition?,
         transitionRootAxis: V4TransitionRootAxis
     ) {
-        let tuning = MigiOrganicMotionTuning.preset(
-            for: selection.clipName,
+        let tuning = Self.organicTuning(
+            named: selection.clipName,
             containsProp: selection.containsProp
         )
         reusableSpriteMesh.addCell(
@@ -2147,8 +2302,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         else {
             return
         }
-        let tuning = MigiOrganicMotionTuning.preset(
-            for: selection.clipName,
+        let tuning = Self.organicTuning(
+            named: selection.clipName,
             containsProp: selection.containsProp
         )
         let deformation = deformationAmount(
@@ -2526,6 +2681,12 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         ) else {
             return nil
         }
+        let spriteIndices = Self.upload(
+            scene.sprite.indices,
+            device: device,
+            slot: slot,
+            buffers: &spriteIndexBuffers
+        )
         let eyes = Self.upload(
             scene.eyes.vertices,
             device: device,
@@ -2533,20 +2694,27 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             buffers: &eyeVertexBuffers
         )
         return V4GPUScene(
-            sprite: sprite,
-            eyes: eyes,
+            sprite: V4GPUMesh(
+                buffer: sprite.buffer,
+                vertexCount: sprite.count,
+                indexBuffer: spriteIndices?.buffer,
+                indexCount: spriteIndices?.count ?? 0
+            ),
+            eyes: eyes.map {
+                V4GPUMesh(buffer: $0.buffer, vertexCount: $0.count)
+            },
             usesTransitionCompositing: scene.usesTransitionCompositing
         )
     }
 
     private static func upload<Vertex>(
-        _ vertices: [Vertex],
+        _ elements: [Vertex],
         device: MTLDevice,
         slot: Int,
         buffers: inout [MTLBuffer?]
-    ) -> V4GPUMesh? {
-        guard !vertices.isEmpty else { return nil }
-        let byteCount = vertices.count * MemoryLayout<Vertex>.stride
+    ) -> (buffer: MTLBuffer, count: Int)? {
+        guard !elements.isEmpty else { return nil }
+        let byteCount = elements.count * MemoryLayout<Vertex>.stride
         if buffers[slot]?.length ?? 0 < byteCount {
             buffers[slot] = device.makeBuffer(
                 length: byteCount,
@@ -2554,14 +2722,14 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             )
         }
         guard let buffer = buffers[slot] else { return nil }
-        vertices.withUnsafeBufferPointer { pointer in
+        elements.withUnsafeBufferPointer { pointer in
             guard let baseAddress = pointer.baseAddress else { return }
             buffer.contents().copyMemory(
                 from: baseAddress,
                 byteCount: byteCount
             )
         }
-        return V4GPUMesh(buffer: buffer, vertexCount: vertices.count)
+        return (buffer, elements.count)
     }
 
     private func encodeSprite(
@@ -2576,11 +2744,21 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         )
         encoder.setFragmentTexture(spriteTexture, index: 0)
         encoder.setVertexBuffer(mesh.buffer, offset: 0, index: 0)
-        encoder.drawPrimitives(
-            type: .triangle,
-            vertexStart: 0,
-            vertexCount: mesh.vertexCount
-        )
+        if mesh.indexCount > 0, let indexBuffer = mesh.indexBuffer {
+            encoder.drawIndexedPrimitives(
+                type: .triangle,
+                indexCount: mesh.indexCount,
+                indexType: .uint16,
+                indexBuffer: indexBuffer,
+                indexBufferOffset: 0
+            )
+        } else {
+            encoder.drawPrimitives(
+                type: .triangle,
+                vertexStart: 0,
+                vertexCount: mesh.vertexCount
+            )
+        }
     }
 
     private func encodeEyes(
@@ -3292,6 +3470,20 @@ private enum V4PipelineBlendMode {
 private struct V4GPUMesh {
     let buffer: MTLBuffer
     let vertexCount: Int
+    var indexBuffer: MTLBuffer?
+    var indexCount: Int
+
+    init(
+        buffer: MTLBuffer,
+        vertexCount: Int,
+        indexBuffer: MTLBuffer? = nil,
+        indexCount: Int = 0
+    ) {
+        self.buffer = buffer
+        self.vertexCount = vertexCount
+        self.indexBuffer = indexBuffer
+        self.indexCount = indexCount
+    }
 }
 
 private struct QACaptureRequest {
@@ -3533,6 +3725,7 @@ private struct V4DeformationProfile {
 
 private struct FullSpriteMesh {
     var vertices: [FullSpriteVertex] = []
+    var indices: [UInt16] = []
 
     mutating func addCell(
         row: Int,
@@ -3606,15 +3799,33 @@ private struct FullSpriteMesh {
             )
         }
 
+        // Shared grid points are deformed exactly once. Neighbouring cells
+        // reuse them through indices, so a cell mesh costs one 15 × 17 vertex
+        // grid instead of four overlapping evaluations per quad.
+        let gridWidth = horizontalSegments + 1
+        let gridHeight = verticalSegments + 1
+        var grid = [FullSpriteVertex]()
+        grid.reserveCapacity(gridWidth * gridHeight)
+        for y in 0..<gridHeight {
+            for x in 0..<gridWidth {
+                grid.append(vertex(x: x, y: y))
+            }
+        }
+
+        let baseIndex = UInt16(vertices.count)
+        vertices.append(contentsOf: grid)
+        indices.reserveCapacity(
+            indices.count + horizontalSegments * verticalSegments * 6
+        )
         for y in 0..<verticalSegments {
             for x in 0..<horizontalSegments {
-                let bottomLeft = vertex(x: x, y: y)
-                let bottomRight = vertex(x: x + 1, y: y)
-                let topLeft = vertex(x: x, y: y + 1)
-                let topRight = vertex(x: x + 1, y: y + 1)
-                vertices.append(contentsOf: [
+                let bottomLeft = baseIndex + UInt16(y * gridWidth + x)
+                let bottomRight = bottomLeft + 1
+                let topLeft = bottomLeft + UInt16(gridWidth)
+                let topRight = topLeft + 1
+                indices.append(contentsOf: [
                     bottomLeft, bottomRight, topRight,
-                    bottomLeft, topRight, topLeft
+                    bottomLeft, topRight, topLeft,
                 ])
             }
         }

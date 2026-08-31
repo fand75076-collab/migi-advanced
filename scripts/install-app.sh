@@ -58,10 +58,11 @@ if [[ -d "$INSTALLED_APP" ]]; then
   BACKUP_STAMP=$(date +%Y%m%d-%H%M%S)
   mkdir -p "$BACKUP_ROOT"
   mv "$INSTALLED_APP" "$BACKUP_ROOT/Migi Advanced-$BACKUP_STAMP.app.backup"
+  # Keep only the most recent install backups.
+  ls -1dt "$BACKUP_ROOT"/*.app.backup 2>/dev/null | tail -n +4 | xargs -I{} rm -rf "{}" 2>/dev/null || true
 fi
 ditto "$BUILT_APP" "$INSTALLED_APP"
 
-test -r "$INSTALLED_APP/Contents/Resources/MigiAdvanced_MigiAdvanced.bundle/migi-parts.png"
 test -r "$INSTALLED_APP/Contents/Resources/MigiAdvanced_MigiAdvanced.bundle/migi-full-spritesheet.png"
 test -r "$INSTALLED_APP/Contents/Resources/MigiAdvanced_MigiAdvanced.bundle/migi-v4-atlas.png"
 test -r "$INSTALLED_APP/Contents/Resources/MigiAdvanced_MigiAdvanced.bundle/migi-v4-atlas.json"

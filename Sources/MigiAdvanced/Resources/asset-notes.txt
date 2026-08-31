@@ -6,5 +6,7 @@ legacy three-legged rows remain available only for short detached scouting and
 anime-modernized device interactions. Every family uses authored full poses,
 per-frame timing, eye anchors, tissue zones and rigid prop zones.
 
-migi-parts.png remains packaged only as a recovery asset; the active renderer
-never assembles Migi from detachable template parts.
+migi-parts.png (and its unused parts-based renderer MigiMetalView.swift) was
+removed from the bundle in v0.14.1; the source material stays in
+Assets/migi-parts-source.png. The active renderer never assembles Migi from
+detachable template parts.

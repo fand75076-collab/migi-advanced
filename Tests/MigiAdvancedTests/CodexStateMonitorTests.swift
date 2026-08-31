@@ -1937,8 +1937,27 @@ final class CodexStateMonitorTests: XCTestCase {
         init() throws {
             homeURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent("CodexStateMonitorTests-\(UUID().uuidString)")
-            let codexSessionURL = homeURL
-                .appendingPathComponent(".codex/sessions/2026/07/30", isDirectory: true)
+            // Discovery prunes calendar buckets older than its 60-day window,
+            // so the fixture session lives a few days in the past instead of
+            // a hardcoded date that would eventually age out of the window.
+            let fixtureDay = Calendar.current.date(
+                byAdding: .day,
+                value: -5,
+                to: Date()
+            ) ?? Date()
+            let fixtureComponents = Calendar.current.dateComponents(
+                [.year, .month, .day],
+                from: fixtureDay
+            )
+            let codexSessionURL = homeURL.appendingPathComponent(
+                String(
+                    format: ".codex/sessions/%04d/%02d/%02d",
+                    fixtureComponents.year ?? 2026,
+                    fixtureComponents.month ?? 1,
+                    fixtureComponents.day ?? 1
+                ),
+                isDirectory: true
+            )
             let grokSessionURL = homeURL
                 .appendingPathComponent(
                     ".grok/sessions/%2Ffixture/session-id",

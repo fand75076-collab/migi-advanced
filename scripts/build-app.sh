@@ -12,12 +12,11 @@ swift build --package-path "$PROJECT_DIR" -c release
 
 BUILD_DIR=$(swift build --package-path "$PROJECT_DIR" -c release --show-bin-path)
 RESOURCE_BUNDLE="$BUILD_DIR/MigiAdvanced_MigiAdvanced.bundle"
-RESOURCE_IMAGE="$RESOURCE_BUNDLE/migi-parts.png"
 FULL_SPRITE_IMAGE="$RESOURCE_BUNDLE/migi-full-spritesheet.png"
 V4_ATLAS_IMAGE="$RESOURCE_BUNDLE/migi-v4-atlas.png"
 V4_ATLAS_MANIFEST="$RESOURCE_BUNDLE/migi-v4-atlas.json"
 
-if [[ ! -d "$RESOURCE_BUNDLE" || ! -r "$RESOURCE_IMAGE" || ! -r "$FULL_SPRITE_IMAGE" \
+if [[ ! -d "$RESOURCE_BUNDLE" || ! -r "$FULL_SPRITE_IMAGE" \
     || ! -r "$V4_ATLAS_IMAGE" || ! -r "$V4_ATLAS_MANIFEST" ]]; then
   echo "Required Migi resource bundle is incomplete: $RESOURCE_BUNDLE" >&2
   exit 1
@@ -41,10 +40,14 @@ if [[ -d "$APP_DIR" ]]; then
   mv "$APP_DIR" "$BACKUP_DIR/Migi Advanced-$BACKUP_STAMP.app.backup"
 fi
 mv "$STAGE_DIR/$APP_NAME" "$APP_DIR"
+
+# Keep only the most recent dist backups; every build otherwise leaves one behind.
+if [[ -d "$BACKUP_DIR" ]]; then
+  ls -1dt "$BACKUP_DIR"/*.app.backup 2>/dev/null | tail -n +4 | xargs -I{} rm -rf {} 2>/dev/null || true
+fi
 codesign --force --deep --sign - "$APP_DIR"
 
 plutil -lint "$APP_DIR/Contents/Info.plist" >/dev/null
-test -r "$APP_DIR/Contents/Resources/MigiAdvanced_MigiAdvanced.bundle/migi-parts.png"
 test -r "$APP_DIR/Contents/Resources/MigiAdvanced_MigiAdvanced.bundle/migi-full-spritesheet.png"
 test -r "$APP_DIR/Contents/Resources/MigiAdvanced_MigiAdvanced.bundle/migi-v4-atlas.png"
 test -r "$APP_DIR/Contents/Resources/MigiAdvanced_MigiAdvanced.bundle/migi-v4-atlas.json"

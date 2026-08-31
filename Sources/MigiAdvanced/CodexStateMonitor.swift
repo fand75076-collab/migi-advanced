@@ -360,6 +360,29 @@ public final class CodexStateMonitor: @unchecked Sendable {
     private let maximumCandidateCount = 12
     private let maximumReadSize: UInt64 = 1_048_576
     private let maximumLineSize = 4_194_304
+    /// Upper bound on rollout bytes consumed within a single poll. A writer
+    /// faster than the monitor can never hold the worker queue hostage; the
+    /// tail continues on the next poll because the offset is already advanced.
+    private let maximumBytesPerPoll: UInt64 = 16 * 1_048_576
+    /// The known-tools ledger only ever grows; bound the persisted file so a
+    /// months-long cooperation cannot inflate relationship-v1.json forever.
+    private static let maximumPersistedKnownTools = 1_024
+    private static let failureStatuses: Set<String> = [
+        "failed", "failure", "error", "errored",
+    ]
+    private static let callRecordTypes: Set<String> = [
+        "function_call", "custom_tool_call", "tool_search_call",
+    ]
+    private static let threatStatuses: Set<String> = [
+        "credible_threat", "security_threat",
+    ]
+    private static let threatRecordTypes: Set<String> = [
+        "credible_threat", "malware_detected", "safety_threat",
+        "security_threat",
+    ]
+    private static let readOnlyGitSubcommands: Set<String> = [
+        "diff", "log", "show", "status",
+    ]
     private let noveltyLifetime: TimeInterval = 12
     static let maximumSpokenTextCharacters = 4_096
     private let completedSpeechLifetime: TimeInterval = 6
@@ -455,7 +478,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
                 // source's selected rollouts are cheap to stat every 0.8 s.
                 candidateFiles[agent] = refreshCandidateFiles(existing)
             } else {
-                candidateFiles[agent] = discoverCandidateFiles(for: agent)
+                candidateFiles[agent] = discoverCandidateFiles(
+                    for: agent,
+                    now: now
+                )
                 lastDiscoveryAt[agent] = now
             }
         }
@@ -566,7 +592,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         }
 
         relationshipState.version = PersistedRelationshipState.currentVersion
-        relationshipState.knownTools = seenTools
+        relationshipState.knownTools = Self.cappedKnownTools(seenTools)
         relationshipState.updatedAt = now
 
         do {
@@ -587,6 +613,20 @@ public final class CodexStateMonitor: @unchecked Sendable {
             // Monitoring must remain read-safe and animation-capable even when
             // persistence is unavailable. A later poll will retry.
         }
+    }
+
+    private static func cappedKnownTools(
+        _ tools: Set<ToolIdentity>
+    ) -> Set<ToolIdentity> {
+        guard tools.count > maximumPersistedKnownTools else { return tools }
+        return Set(
+            tools
+                .sorted {
+                    ($0.agent.rawValue, $0.canonicalName)
+                        < ($1.agent.rawValue, $1.canonicalName)
+                }
+                .prefix(maximumPersistedKnownTools)
+        )
     }
 
     private func monitoredAgents(for mode: AgentMonitoringMode) -> [MonitoredAgent] {
@@ -632,7 +672,15 @@ public final class CodexStateMonitor: @unchecked Sendable {
         }
     }
 
-    private func discoverCandidateFiles(for agent: MonitoredAgent) -> [CandidateFile] {
+    /// Only sessions recent enough to still be live are worth discovering;
+    /// older rollouts never enter the top candidates again. Calendar buckets
+    /// beyond this window are skipped wholesale instead of enumerated.
+    private static let discoveryWindowDays = 60
+
+    private func discoverCandidateFiles(
+        for agent: MonitoredAgent,
+        now: Date
+    ) -> [CandidateFile] {
         let keys: [URLResourceKey] = [
             .isRegularFileKey,
             .contentModificationDateKey,
@@ -648,20 +696,100 @@ public final class CodexStateMonitor: @unchecked Sendable {
             return []
         }
 
+        let cutoff = Calendar.current.date(
+            byAdding: .day,
+            value: -Self.discoveryWindowDays,
+            to: now
+        )
+        let rootPath = sourceDirectory(for: agent).path
         var discovered: [CandidateFile] = []
-        for case let url as URL in enumerator {
+        while let url = enumerator.nextObject() as? URL {
+            if let cutoff,
+               isStaleCalendarBucket(url, below: rootPath, cutoff: cutoff)
+            {
+                enumerator.skipDescendants()
+                continue
+            }
             guard matchesSourceFile(url, agent: agent),
                   let values = try? url.resourceValues(forKeys: Set(keys)),
                   values.isRegularFile == true,
-                  let candidate = candidateMetadata(for: url, agent: agent)
+                  let modificationDate = values.contentModificationDate,
+                  let size = values.fileSize
             else {
                 continue
             }
 
-            discovered.append(candidate)
+            // The enumerator prefetches the values above; only the inode
+            // needs one extra lookup, and losing it degrades to the same
+            // mtime-based rotation fallback as before.
+            var fileIdentifier: UInt64?
+            if #available(macOS 13.3, *) {
+                let inodeValues = try? url.resourceValues(
+                    forKeys: [URLResourceKey.fileIdentifierKey]
+                )
+                fileIdentifier = inodeValues?.fileIdentifier
+            } else {
+                let attributes = try? FileManager.default.attributesOfItem(
+                    atPath: url.path
+                )
+                fileIdentifier = (attributes?[.systemFileNumber] as? NSNumber)?
+                    .uint64Value
+            }
+            discovered.append(
+                CandidateFile(
+                    agent: agent,
+                    url: url.standardizedFileURL,
+                    modificationDate: modificationDate,
+                    size: UInt64(max(size, 0)),
+                    fileIdentifier: fileIdentifier
+                )
+            )
         }
 
         return sortedCandidates(discovered)
+    }
+
+    /// Codex organizes sessions as YYYY/MM/DD buckets. A directory whose
+    /// whole relative path below the session root is 1-3 numeric components
+    /// is such a bucket; prune it when the bucket's calendar date predates
+    /// the discovery cutoff. Any other layout (Grok, ZCode, mixed names)
+    /// never prunes, so the check can only skip work, never hide files.
+    private func isStaleCalendarBucket(
+        _ url: URL,
+        below rootPath: String,
+        cutoff: Date
+    ) -> Bool {
+        let path = url.path
+        guard path.hasPrefix(rootPath) else { return false }
+        let relative = path.dropFirst(
+            min(rootPath.count + 1, path.count)
+        )
+        let components = relative.split(separator: "/")
+        guard (1...3).contains(components.count),
+              components.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) })
+        else {
+            return false
+        }
+
+        let numbers = components.compactMap { Int($0) }
+        guard numbers.count == components.count else { return false }
+        let cutoffComponents = Calendar.current.dateComponents(
+            [.year, .month, .day],
+            from: cutoff
+        )
+        let cutoffYear = cutoffComponents.year ?? .max
+        let cutoffMonth = cutoffComponents.month ?? .max
+        let cutoffDay = cutoffComponents.day ?? .max
+
+        switch numbers.count {
+        case 1:
+            return numbers[0] < cutoffYear
+        case 2:
+            return (numbers[0], numbers[1]) < (cutoffYear, cutoffMonth)
+        default:
+            return (numbers[0], numbers[1], numbers[2])
+                < (cutoffYear, cutoffMonth, cutoffDay)
+        }
     }
 
     private func refreshCandidateFiles(_ candidates: [CandidateFile]) -> [CandidateFile] {
@@ -789,9 +917,14 @@ public final class CodexStateMonitor: @unchecked Sendable {
             // Catch up from the exact previous offset in bounded chunks. A
             // burst larger than 1 MiB must not erase open calls, the active
             // turn, evidence, or a JSON line split across chunk boundaries.
-            while let chunk = try handle.read(upToCount: Int(maximumReadSize)),
+            // The per-poll byte budget keeps a hyperactive writer from holding
+            // the worker queue; the tail resumes on the next poll.
+            var pollBytesConsumed: UInt64 = 0
+            while pollBytesConsumed < maximumBytesPerPoll,
+                  let chunk = try handle.read(upToCount: Int(maximumReadSize)),
                   !chunk.isEmpty
             {
+                pollBytesConsumed += UInt64(chunk.count)
                 runtime.offset += UInt64(chunk.count)
                 var incoming = chunk
 
@@ -807,9 +940,22 @@ public final class CodexStateMonitor: @unchecked Sendable {
                     }
                 }
 
-                var combined = runtime.remainder
-                combined.append(incoming)
-                let lines = completeLines(in: combined, remainder: &runtime.remainder)
+                let lines: [Data]
+                if runtime.remainder.isEmpty {
+                    // Steady state: every previous chunk ended on a newline,
+                    // so no leftover bytes need re-scanning.
+                    lines = completeLines(
+                        in: incoming,
+                        remainder: &runtime.remainder
+                    )
+                } else {
+                    var combined = runtime.remainder
+                    combined.append(incoming)
+                    lines = completeLines(
+                        in: combined,
+                        remainder: &runtime.remainder
+                    )
+                }
 
                 for line in lines {
                     // One record can contain arbitrarily large model/tool output.
@@ -860,25 +1006,40 @@ public final class CodexStateMonitor: @unchecked Sendable {
         }
 
         var lines: [Data] = []
-        var lineStart = data.startIndex
-        var cursor = data.startIndex
-
-        while cursor < data.endIndex {
-            if data[cursor] == 0x0A {
-                if lineStart < cursor {
-                    lines.append(data.subdata(in: lineStart..<cursor))
+        var remainderRange: Range<Data.Index>?
+        // One raw-memory pass replaces per-byte Data subscripts. Buffer
+        // offsets are zero-based, so every range is translated through
+        // data.startIndex; this also stays correct for sliced Data produced
+        // by the partial-line drop above.
+        data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            let count = raw.count
+            var lineStart = 0
+            var cursor = 0
+            while cursor < count {
+                if raw[cursor] == 0x0A {
+                    if lineStart < cursor {
+                        lines.append(
+                            data.subdata(
+                                in: lineStart + data.startIndex
+                                    ..< cursor + data.startIndex
+                            )
+                        )
+                    }
+                    lineStart = cursor + 1
                 }
-                lineStart = data.index(after: cursor)
+                cursor += 1
             }
-            cursor = data.index(after: cursor)
+            if lineStart < count {
+                remainderRange =
+                    lineStart + data.startIndex ..< data.endIndex
+            }
         }
 
-        if lineStart < data.endIndex {
-            remainder = data.subdata(in: lineStart..<data.endIndex)
+        if let remainderRange {
+            remainder = data.subdata(in: remainderRange)
         } else {
             remainder.removeAll(keepingCapacity: true)
         }
-
         return lines
     }
 
@@ -956,7 +1117,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
             }
         }
 
-        if ["failed", "failure", "error", "errored"].contains(status) {
+        if Self.failureStatuses.contains(status) {
             runtime.activeTurn = nil
             runtime.spokenMessage = nil
             runtime.openCalls.removeAll(keepingCapacity: true)
@@ -1297,7 +1458,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         let status = ((envelope["status"] as? String)
             ?? (response["status"] as? String)
             ?? "").lowercased()
-        if ["failed", "failure", "error", "errored"].contains(status)
+        if Self.failureStatuses.contains(status)
             || finishReason.contains("error")
             || finishReason.contains("fail")
         {
@@ -1376,7 +1537,10 @@ public final class CodexStateMonitor: @unchecked Sendable {
     }
 
     private func parseTimestamp(_ value: String) -> Date? {
-        if let date = fractionalTimestampFormatter.date(from: value) {
+        // ISO8601 parsing is expensive, and every whole-second timestamp paid
+        // a guaranteed-failing fractional attempt first. Whole-second strings
+        // never contain a fraction marker, so branch on that instead.
+        if value.contains("."), let date = fractionalTimestampFormatter.date(from: value) {
             return date
         }
         return wholeSecondsTimestampFormatter.date(from: value)
@@ -1394,7 +1558,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         let envelopeType = record.envelopeType.lowercased()
         let status = (record.payload["status"] as? String)?.lowercased() ?? ""
 
-        if ["function_call", "custom_tool_call", "tool_search_call"].contains(payloadType),
+        if Self.callRecordTypes.contains(payloadType),
            let rawName = record.payload["name"] as? String
         {
             let activity = activityForTool(named: rawName)
@@ -2028,7 +2192,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
         }
 
         if executable == "git", words.count > 1 {
-            return ["diff", "log", "show", "status"].contains(words[1])
+            return Self.readOnlyGitSubcommands.contains(words[1])
         }
         if executable == "defaults", words.count > 1 {
             return words[1] == "read"
@@ -2077,7 +2241,7 @@ public final class CodexStateMonitor: @unchecked Sendable {
             return true
         }
 
-        if ["failed", "failure", "error", "errored"].contains(status) {
+        if Self.failureStatuses.contains(status) {
             return true
         }
 
@@ -2111,13 +2275,8 @@ public final class CodexStateMonitor: @unchecked Sendable {
         // mention words such as "fatal", "unsafe", or "attack".
         if record.payload["credible_threat"] as? Bool == true
             || record.payload["security_threat"] as? Bool == true
-            || [
-                "credible_threat",
-                "malware_detected",
-                "safety_threat",
-                "security_threat",
-            ].contains(payloadType)
-            || ["credible_threat", "security_threat"].contains(status)
+            || Self.threatRecordTypes.contains(payloadType)
+            || Self.threatStatuses.contains(status)
         {
             return .credibleThreat
         }

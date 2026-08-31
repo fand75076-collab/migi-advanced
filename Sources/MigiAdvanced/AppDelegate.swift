@@ -44,12 +44,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sourcePath: nil
     )
 
-    private var speechBubblesEnabled: Bool {
+    /// Frame-driven code reads these preferences at up to 60 Hz, so the
+    /// render hot path gets cached values instead of UserDefaults lookups.
+    /// Caches refresh on toggles and on defaults-change notifications.
+    private var cachedMigiVoiceEnabled = true
+    private var cachedSpeechBubblesEnabled = true
+    private var defaultsChangeObserver: NSObjectProtocol?
+
+    private func refreshSpeechPreferenceCaches() {
         let defaults = UserDefaults.standard
-        if defaults.object(forKey: Self.speechBubblesPreferenceKey) == nil {
-            return true
-        }
-        return defaults.bool(forKey: Self.speechBubblesPreferenceKey)
+        cachedMigiVoiceEnabled =
+            defaults.object(forKey: Self.migiVoicePreferenceKey) == nil
+                ? true
+                : defaults.bool(forKey: Self.migiVoicePreferenceKey)
+        cachedSpeechBubblesEnabled =
+            defaults.object(forKey: Self.speechBubblesPreferenceKey) == nil
+                ? true
+                : defaults.bool(forKey: Self.speechBubblesPreferenceKey)
+    }
+
+    private var speechBubblesEnabled: Bool {
+        cachedSpeechBubblesEnabled
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -63,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        refreshSpeechPreferenceCaches()
         let overlayController = MigiOverlayController()
         self.overlayController = overlayController
         restoreSleepLedger()
@@ -95,6 +111,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stateMonitor.pollNow()
         startSleepLedgerPersistence()
 
+        // External preference writers stay authoritative without re-querying
+        // defaults from the render hot path.
+        defaultsChangeObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: UserDefaults.standard,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshSpeechPreferenceCaches()
+        }
+
         hideObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didHideNotification,
             object: NSApplication.shared,
@@ -126,6 +152,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         if let hideObserver {
             NotificationCenter.default.removeObserver(hideObserver)
+        }
+        if let defaultsChangeObserver {
+            NotificationCenter.default.removeObserver(defaultsChangeObserver)
         }
     }
 
@@ -313,6 +342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Enabling deliberately does not replay the last snapshot. A new
         // utterance revision will be shown the next time the monitor sees one.
+        refreshSpeechPreferenceCaches()
         refreshSpeechBubblesMenu()
     }
 
@@ -602,6 +632,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             !migiVoiceEnabled,
             forKey: Self.migiVoicePreferenceKey
         )
+        refreshSpeechPreferenceCaches()
         refreshMigiVoiceMenu()
     }
 
@@ -610,11 +641,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var migiVoiceEnabled: Bool {
-        let defaults = UserDefaults.standard
-        if defaults.object(forKey: Self.migiVoicePreferenceKey) == nil {
-            return true
-        }
-        return defaults.bool(forKey: Self.migiVoicePreferenceKey)
+        cachedMigiVoiceEnabled
     }
 
     // MARK: - Migi voice lines (canon, hardcoded, sparse)
