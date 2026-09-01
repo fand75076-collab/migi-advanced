@@ -2997,8 +2997,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             return Bundle.module.url(forResource: name, withExtension: fileExtension)
         }
 
-        guard let textureURL = resourceURL(name: "migi-v4-atlas", extension: "png"),
-              let manifestURL = resourceURL(name: "migi-v4-atlas", extension: "json")
+        // A BC7 KTX1 cut the resident atlas copy from 135 MB to 34 MB. PNG
+        // stays as the fallback so the app still runs if the KTX is missing
+        // (e.g. older installs).
+        guard let manifestURL = resourceURL(name: "migi-v4-atlas", extension: "json")
         else {
             fatalError("The coherent Migi v4 atlas resources are missing.")
         }
@@ -3014,28 +3016,49 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         }
 
         let loader = MTKTextureLoader(device: device)
-        do {
-            let texture = try loader.newTexture(
-                URL: textureURL,
-                options: [
-                    .origin: MTKTextureLoader.Origin.topLeft,
-                    .SRGB: true
-                ]
-            )
-            guard manifest.version >= 1,
-                  manifest.columns > 0,
-                  manifest.rows > 0,
-                  manifest.cellWidth > 0,
-                  manifest.cellHeight > 0,
-                  texture.width == manifest.columns * manifest.cellWidth,
-                  texture.height == manifest.rows * manifest.cellHeight
-            else {
-                fatalError(
-                    "Migi v4 atlas dimensions do not match its manifest: "
-                        + "\(texture.width)x\(texture.height), "
-                        + "\(manifest.columns)x\(manifest.rows) cells"
+        let texture: MTLTexture
+        if let ktxURL = resourceURL(name: "migi-v4-atlas", extension: "ktx") {
+            do {
+                // Block-compressed KTX files are stored bottom-up; the
+                // topLeft origin flip is unsupported for block formats and
+                // would make the loader emit the texture bottom-up anyway,
+                // matching the PNG's topLeft orientation as loaded.
+                texture = try loader.newTexture(
+                    URL: ktxURL,
+                    options: [.SRGB: true]
                 )
+            } catch {
+                fatalError("Unable to load the Migi v4 BC7 atlas KTX: \(error)")
             }
+        } else if let textureURL = resourceURL(name: "migi-v4-atlas", extension: "png") {
+            do {
+                texture = try loader.newTexture(
+                    URL: textureURL,
+                    options: [
+                        .origin: MTKTextureLoader.Origin.topLeft,
+                        .SRGB: true
+                    ]
+                )
+            } catch {
+                fatalError("Unable to load the Migi v4 atlas PNG: \(error)")
+            }
+        } else {
+            fatalError("The Migi v4 atlas texture is missing.")
+        }
+        guard manifest.version >= 1,
+              manifest.columns > 0,
+              manifest.rows > 0,
+              manifest.cellWidth > 0,
+              manifest.cellHeight > 0,
+              texture.width == manifest.columns * manifest.cellWidth,
+              texture.height == manifest.rows * manifest.cellHeight
+        else {
+            fatalError(
+                "Migi v4 atlas dimensions do not match its manifest: "
+                    + "\(texture.width)x\(texture.height), "
+                    + "\(manifest.columns)x\(manifest.rows) cells"
+            )
+        }
             for (name, clip) in manifest.clips {
                 let frameDurationsAreValid =
                     clip.frameDurations == nil
@@ -3079,9 +3102,6 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 }
             }
             return (texture, manifest)
-        } catch {
-            fatalError("Unable to load the coherent Migi v4 atlas: \(error)")
-        }
     }
 
     private static func makePipeline(
