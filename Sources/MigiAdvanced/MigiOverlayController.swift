@@ -13,10 +13,15 @@ final class MigiOverlayController {
     private let panel: MigiPanel
     private let metalView: MigiFullSpriteView
     private let speechBubble = MigiSpeechBubbleController()
+    private let screenGuard = MigiScreenGuard()
     private var anchorOrigin: CGPoint
     private var lastRoamOffset: CGPoint = .zero
     private var manualDragInProgress = false
     private var lastFrameFatigue: CGFloat = 0
+    /// True while the pet is intentionally off-stage for a full-screen
+    /// playback window (video, presentation). `show()` calls from the launch
+    /// retry sequence or the reopen path must not fight the guard.
+    private var isSuppressedForPlayback = false
 
     /// Latest rendered frame, forwarded for app-level observers (voice lines,
     /// sleep-ledger sampling). Ownership stays with the behavior controller.
@@ -57,7 +62,10 @@ final class MigiOverlayController {
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        // No `.fullScreenAuxiliary`: the pet must not follow the user into a
+        // native full-screen Space. MigiScreenGuard additionally hides it for
+        // borderless full-screen players that never create a Space.
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary]
         panel.contentView = metalView
 
         anchorOrigin = Self.persistedOrigin() ?? Self.defaultOrigin(for: initialSize)
@@ -78,13 +86,44 @@ final class MigiOverlayController {
                 self.persistPosition()
             }
         }
+
+        // The pet steps aside while another process owns the whole screen
+        // (full-screen video, presentations) and returns on its own when
+        // playback ends. Demo/QA runs are exempt for deterministic captures.
+        screenGuard.configure(
+            petFrameProvider: { [weak self] in
+                self?.panel.frame ?? .zero
+            },
+            demoModeProvider: { [weak self] in
+                self?.metalView.isDemoModeEnabled ?? false
+            }
+        )
+        screenGuard.onChange = { [weak self] suppress in
+            self?.setSuppressedForPlayback(suppress)
+        }
+        screenGuard.start()
     }
 
     func show() {
+        guard !isSuppressedForPlayback else { return }
         clampPanelToVisibleScreen()
         panel.orderFrontRegardless()
         metalView.resumeRendering()
         speechBubble.updatePetFrame(panel.frame)
+    }
+
+    /// Remove the pet from the stage while a full-screen playback window is
+    /// up. The panel is ordered out — hidden, not destroyed — so position,
+    /// roam anchor, and behavior state survive; `show()` restores it.
+    private func setSuppressedForPlayback(_ suppress: Bool) {
+        guard suppress != isSuppressedForPlayback else { return }
+        isSuppressedForPlayback = suppress
+        if suppress {
+            speechBubble.clearSpeech(immediate: true)
+            panel.orderOut(nil)
+        } else {
+            show()
+        }
     }
 
     func ingest(_ snapshot: CodexActivitySnapshot) {
@@ -145,7 +184,11 @@ final class MigiOverlayController {
         rebaseAnchor(at: visibleOrigin)
         panel.setFrameOrigin(visibleOrigin)
         clampPanelToVisibleScreen()
-        panel.orderFrontRegardless()
+        // Suppressed playback sessions stay hidden even after a menu reset;
+        // the guard's next poll re-shows the pet once playback ends.
+        if !isSuppressedForPlayback {
+            panel.orderFrontRegardless()
+        }
         persistPosition()
         speechBubble.updatePetFrame(panel.frame)
     }

@@ -83,7 +83,9 @@ final class MigiSpeechBubbleController {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.ignoresMouseEvents = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        // Mirrors the sprite panel: the bubble never follows a full-screen
+        // Space, and MigiScreenGuard hides it during playback anyway.
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary]
         panel.contentView = container
         panel.alphaValue = 0
 
