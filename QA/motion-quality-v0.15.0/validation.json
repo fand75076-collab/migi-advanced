@@ -1,0 +1,199 @@
+{
+  "ok": true,
+  "errors": [],
+  "scenarios": {
+    "breathing": {
+      "before": {
+        "frames": 180,
+        "minimum_bbox_area": 17136,
+        "skipped_frame_events": [],
+        "frame_rate_changes": 6
+      },
+      "after": {
+        "frames": 180,
+        "minimum_bbox_area": 17136,
+        "skipped_frame_events": [],
+        "frame_rate_changes": 7
+      }
+    },
+    "work-rate": {
+      "before": {
+        "frames": 180,
+        "minimum_bbox_area": 22720,
+        "skipped_frame_events": [
+          {
+            "time": 4,
+            "from": 3,
+            "to": 5
+          }
+        ],
+        "frame_rate_changes": 0
+      },
+      "after": {
+        "frames": 180,
+        "minimum_bbox_area": 22880,
+        "skipped_frame_events": [],
+        "frame_rate_changes": 0
+      }
+    },
+    "blink-gaze": {
+      "before": {
+        "frames": 180,
+        "minimum_bbox_area": 32308,
+        "skipped_frame_events": [],
+        "frame_rate_changes": 0
+      },
+      "after": {
+        "frames": 180,
+        "minimum_bbox_area": 32505,
+        "skipped_frame_events": [],
+        "frame_rate_changes": 0
+      }
+    },
+    "handoff": {
+      "before": {
+        "frames": 180,
+        "minimum_bbox_area": 17136,
+        "skipped_frame_events": [],
+        "frame_rate_changes": 3
+      },
+      "after": {
+        "frames": 180,
+        "minimum_bbox_area": 17136,
+        "skipped_frame_events": [],
+        "frame_rate_changes": 4
+      }
+    }
+  },
+  "atlas_sha256": {
+    "migi-v4-atlas.png": "630080752431281387159863d532c649d13a3cee430fd61660805bf30bda3f8e",
+    "migi-v4-atlas.json": "3a68d95628c8f54e75f15211419e8e55050177d0df851cde6871bf354e78a4c0",
+    "migi-v4-atlas.ktx": "632fe699d91dd209fd8a333a4f5a2b9b157ac50d19469741e160050ba5a1ed4b"
+  },
+  "multi_eye_blink": {
+    "frames": 180,
+    "minimum_eye_count": 2,
+    "blink_samples": [
+      {
+        "clip": "laptop",
+        "column": 1,
+        "eyelids": [
+          0,
+          0
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2
+      },
+      {
+        "clip": "laptop",
+        "column": 1,
+        "eyelids": [
+          0.30991210699984834,
+          0
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2.033333333333333
+      },
+      {
+        "clip": "laptop",
+        "column": 2,
+        "eyelids": [
+          0.8332063201623496,
+          0.14596352183031797
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2.066666666666667
+      },
+      {
+        "clip": "laptop",
+        "column": 2,
+        "eyelids": [
+          1,
+          0.6639231825615897
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2.1
+      },
+      {
+        "clip": "laptop",
+        "column": 2,
+        "eyelids": [
+          1,
+          0.998983894731259
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2.1333333333333333
+      },
+      {
+        "clip": "laptop",
+        "column": 2,
+        "eyelids": [
+          0.8737997256046282,
+          1
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2.1666666666666665
+      },
+      {
+        "clip": "laptop",
+        "column": 2,
+        "eyelids": [
+          0.5829903978147941,
+          0.9434348422458206
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2.2
+      },
+      {
+        "clip": "laptop",
+        "column": 2,
+        "eyelids": [
+          0.259259259207519,
+          0.6952592591889704
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2.2333333333333334
+      },
+      {
+        "clip": "laptop",
+        "column": 3,
+        "eyelids": [
+          0.03429355281973656,
+          0.36807133059172803
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2.2666666666666666
+      },
+      {
+        "clip": "laptop",
+        "column": 3,
+        "eyelids": [
+          0,
+          0.09355829899935231
+        ],
+        "eyes": 2,
+        "fps": 60,
+        "rate": 1,
+        "time": 2.3
+      }
+    ]
+  }
+}

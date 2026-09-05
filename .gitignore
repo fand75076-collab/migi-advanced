@@ -25,6 +25,9 @@ DerivedData/
 # QA captures (large binary assets; available in releases)
 QA/**/*.png
 QA/**/*.gif
+QA/**/*.mp4
+QA/motion-quality-v0.15.0/before/
+QA/motion-quality-v0.15.0/after/
 
 # Editor
 .vscode/

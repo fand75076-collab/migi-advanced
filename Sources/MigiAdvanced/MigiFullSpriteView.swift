@@ -55,6 +55,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private var blinkStartedAt: TimeInterval?
     private var blinkReleaseStartedAt: TimeInterval?
     private var activeFrameRate = 60
+    private var frameRateGovernor = MigiFrameRateGovernor()
+    private var trackedEyesAreChasing = false
+    private var clipPlaybackClock = MigiClipPlaybackClock()
+    private var breathingPhase = MigiBreathingPhase()
     private var activeBufferSlot = -1
     private let bufferSlotLock = NSLock()
     private var bufferSlotsInUse = Array(
@@ -275,6 +279,62 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         }
     }
 
+    #if DEBUG
+    /// Opt-in visual regression uses the production meshes, shaders and GPU
+    /// readback at a controlled clock, without showing or moving a desktop pet.
+    func captureMotionQAFrame(
+        _ frame: MigiBehaviorFrame,
+        time: TimeInterval,
+        deltaTime: TimeInterval,
+        gazeTarget: SIMD2<Double>,
+        destination: URL
+    ) throws -> (clip: String, column: Int, fps: Int, eyes: Int, eyelids: [Double]) {
+        forcedGazeTarget = gazeTarget
+        gazeConvergence = 1
+        let chasing: Bool
+        if frame.suppressesPointerGaze {
+            gaze = .zero
+            gazeVelocity = .zero
+            chasing = false
+        } else {
+            chasing = updateGaze(deltaTime: deltaTime, behavior: frame)
+        }
+        let selection = selectSprite(for: frame, time: time)
+        updateWakeHandoff(for: selection, behavior: frame, time: time)
+        updateFrameRate(for: frame, selection: selection, gazeIsChasing: chasing, time: time)
+        let scene = makeScene(
+            selection: selection, behavior: frame,
+            time: time, deltaTime: deltaTime
+        )
+        guard let commandBuffer = commandQueue.makeCommandBuffer(),
+              let gpuScene = prepareGPUScene(scene, slot: 0)
+        else {
+            throw NSError(domain: "MigiMotionQA", code: 1)
+        }
+        let result = encodeQACapture(
+            scene: gpuScene, pixelWidth: 230, pixelHeight: 270,
+            commandBuffer: commandBuffer,
+            request: QACaptureRequest(destinationURL: destination, failedAttempts: 0)
+        )
+        guard case let .success(submission) = result else {
+            throw NSError(domain: "MigiMotionQA", code: 2)
+        }
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        guard commandBuffer.status == .completed else {
+            throw commandBuffer.error ?? NSError(domain: "MigiMotionQA", code: 3)
+        }
+        finishQACapture(submission, commandBuffer: commandBuffer)
+        guard FileManager.default.fileExists(atPath: destination.path) else {
+            throw NSError(domain: "MigiMotionQA", code: 4)
+        }
+        let eyelids = selection.eyeAnchors.indices.map {
+            Double(blinkCurve(time: time - Double(min($0, 3)) * Self.blinkStaggerPerEye))
+        }
+        return (selection.clipName, selection.column, activeFrameRate, selection.eyeAnchors.count, eyelids)
+    }
+    #endif
+
     func setQAClip(_ name: String?) {
         guard let name else {
             forcedClipName = nil
@@ -447,7 +507,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             updateFrameRate(
                 for: behaviorFrame,
                 selection: selection,
-                gazeIsChasing: gazeIsChasing
+                gazeIsChasing: gazeIsChasing,
+                time: now
             )
             // Reserve the GPU slot and drawable before spending CPU on the
             // deformed mesh; when the three in-flight buffers are still owned
@@ -758,10 +819,10 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         } else {
             stiffness = 3.6
         }
-        let damping = 2.0 * sqrt(stiffness)
-        let acceleration = (target - gaze) * stiffness - gazeVelocity * damping
-        gazeVelocity += acceleration * deltaTime
-        gaze += gazeVelocity * deltaTime
+        MigiDampedMotion.advance(
+            value: &gaze, velocity: &gazeVelocity, target: target,
+            stiffness: stiffness, deltaTime: deltaTime
+        )
 
         return simd_length(target - gaze) > 0.012
             || simd_length(gazeVelocity) > 0.018
@@ -936,8 +997,14 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     private func updateFrameRate(
         for frame: MigiBehaviorFrame,
         selection: V4SpriteSelection,
-        gazeIsChasing: Bool
+        gazeIsChasing: Bool,
+        time: TimeInterval
     ) {
+        updateBlinkState(for: frame, time: time)
+        let blinkIsAnimating = frame.blinkWanted
+            || blinkReleaseStartedAt.map {
+                time - $0 < 0.15 + 3 * Self.blinkStaggerPerEye
+            } == true
         var highDetailMicroAction = false
         switch frame.microAction {
         case .rapidNotes, .fineMotor, .organDrift, .logicCount,
@@ -962,13 +1029,14 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         } else if frame.isMoving
                     || frame.activity == .failed
                     || highDetailMicroAction
-                    || (selection.pointerEyes && gazeIsChasing)
+                    || (selection.pointerEyes
+                        && (gazeIsChasing || trackedEyesAreChasing || blinkIsAnimating))
         {
             target = 60
         } else {
             target = 30
         }
-        setFrameRate(target)
+        setFrameRate(frameRateGovernor.update(requested: target, time: time))
     }
 
     private func updateWakeHandoff(
@@ -1420,12 +1488,17 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             activeClipName = identity
             activeClipStartedAt = time
         }
-        let clipTime = max(time - activeClipStartedAt, 0)
+        let clipTime = clipPlaybackClock.sample(
+            identity: identity,
+            startedAt: activeClipStartedAt,
+            time: time,
+            targetRate: playbackRate
+        )
         let frame = Self.frameIndex(
             for: resolved.clip,
             clipName: resolved.name,
             elapsed: clipTime,
-            playbackRate: playbackRate
+            playbackRate: 1
         )
         return makeSpriteSelection(
             clipName: resolved.name,
@@ -2082,7 +2155,9 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         deltaTime: TimeInterval
     ) -> V4SpriteScene {
         let phase = CGFloat(time)
-        let breath = sin(phase * (0.88 + behavior.bodyEnergy * 0.08))
+        let breath = breathingPhase.advance(
+            deltaTime: deltaTime, energy: behavior.bodyEnergy
+        )
         let viewAspect = bounds.height / max(bounds.width, 1)
         var baseHeight: CGFloat = 0.91
         var baseWidth = baseHeight * viewAspect
@@ -2103,13 +2178,14 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         )
         let center = CGPoint(
             x: 0.5,
-            y: 0.5 + (selection.containsProp ? 0.0008 : 0.0015) * breath
+            // Keep the lower baseline planted while breathing. Rigid prop
+            // clips have no whole-image vertical bob at all.
+            y: 0.5 + (size.height - baseHeight) * 0.5
         )
 
         reusableSpriteMesh.vertices.removeAll(keepingCapacity: true)
         reusableSpriteMesh.indices.removeAll(keepingCapacity: true)
         reusableEyeMesh.vertices.removeAll(keepingCapacity: true)
-        updateBlinkState(for: behavior, time: time)
 
         let activeHandoff =
             wakeHandoff ?? ordinaryHandoff ?? authoredFrameHandoff
@@ -2191,10 +2267,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                 phase: phase,
                 deltaTime: deltaTime,
                 behavior: behavior,
-                transition: nil,
-                transitionRootAxis: Self.transitionRootAxis(
-                    named: eyeSelection.clipName
-                ),
+                transition: progress < 0.5 ? outgoing : incoming,
+                transitionRootAxis: transitionRootAxis,
                 trackingNamespace: nil
             )
         } else {
@@ -2364,12 +2438,11 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                     y: tissueOffset.y + transitionOffset.y
                 ),
                 blink: blinkCurve(
-                    for: behavior,
                     time:
                         phase
                         - Double(min(index, 3)) * Self.blinkStaggerPerEye
                 ),
-                organScale: 0.52 + 0.48 * sqrt(visibility),
+                alpha: visibility,
                 mesh: &reusableEyeMesh
             )
         }
@@ -2407,7 +2480,8 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         time: TimeInterval,
         namespace: String? = nil
     ) -> [SIMD2<Double>] {
-        anchors.enumerated().map { index, anchor in
+        trackedEyesAreChasing = false
+        return anchors.enumerated().map { index, anchor in
             let baseKey = anchor.trackingID ?? "eye-\(index)"
             let key = namespace.map { "\($0):\(baseKey)" } ?? baseKey
             let defaultGain: CGFloat = index == 0 ? 1 : max(0.56, 0.78 - CGFloat(index - 1) * 0.10)
@@ -2450,12 +2524,13 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
                     1
                 )
             )
-            let damping = 2.0 * sqrt(stiffness)
-            let acceleration =
-                (target - state.value) * stiffness
-                    - state.velocity * damping
-            state.velocity += acceleration * deltaTime
-            state.value += state.velocity * deltaTime
+            MigiDampedMotion.advance(
+                value: &state.value, velocity: &state.velocity, target: target,
+                stiffness: stiffness, deltaTime: deltaTime
+            )
+            trackedEyesAreChasing = trackedEyesAreChasing
+                || simd_length(target - state.value) > 0.012
+                || simd_length(state.velocity) > 0.018
             eyeTrackingStates[key] = state
             return state.value
         }
@@ -2537,23 +2612,16 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
     /// Pure blink-curve sample; callers shift `time` by an eye's stagger
     /// offset. Canon blinks are slow and deliberate rather than conversational.
     private func blinkCurve(
-        for behavior: MigiBehaviorFrame,
         time: TimeInterval
     ) -> CGFloat {
-        if behavior.blinkWanted {
-            guard let startedAt = blinkStartedAt else { return 0 }
-            let elapsed = max(time - startedAt, 0)
-            return Self.smoothStep(CGFloat(min(elapsed / 0.09, 1)))
-        }
-        guard let releaseStartedAt = blinkReleaseStartedAt else { return 0 }
-        let progress = CGFloat(min(max(time - releaseStartedAt, 0) / 0.15, 1))
-        if progress >= 1 { return 0 }
-        return 1 - Self.smoothStep(progress)
-    }
-
-    private static func smoothStep(_ value: CGFloat) -> CGFloat {
-        let clamped = min(max(value, 0), 1)
-        return clamped * clamped * (3 - 2 * clamped)
+        // Sample the delayed eye's own time, including its closing phase after
+        // the leading eye has started reopening. A global blinkWanted branch
+        // snapped trailing eyes straight to fully closed at that boundary.
+        MigiBlinkEnvelope.sample(
+            startedAt: blinkStartedAt,
+            releasedAt: blinkReleaseStartedAt,
+            time: time
+        )
     }
 
     private func addPointerEye(
@@ -2565,7 +2633,6 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         tissueOffset: CGPoint,
         blink: CGFloat,
         alpha: CGFloat = 1,
-        organScale: CGFloat = 1,
         mesh: inout FullColorMesh
     ) {
         let anchorX = mirrored ? 1 - anchor.x : anchor.x
@@ -2577,7 +2644,6 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         )
         let sourceRadius =
             anchor.radius * min(spriteSize.width, spriteSize.height)
-                * min(max(organScale, 0.35), 1)
         // The white must fully cover the authored eyeball in the atlas frame;
         // otherwise the painted iris underneath leaks past the procedural
         // overlay at the rim. Socket shading stays outside this radius.
@@ -2623,23 +2689,31 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
         )
 
         if blink > 0.001 {
-            mesh.addEllipse(
-                center: center,
-                rx: sourceRadius * 0.93,
-                ry: sourceRadius * 0.84,
-                color: .eyelidFlesh.withAlphaMultiplier(alpha * blink),
-                segments: 32
+            let lids = MigiEyelidShape(closure: blink)
+            let lidRadiusX = whiteRadius * 1.015
+            let lidRadiusY = whiteRadius * 0.94 * 1.015
+            // Opaque geometry moves over the intact eye. Fading flesh across
+            // the whole eyeball made the pupil dissolve and left a white rim.
+            mesh.addEllipticalCap(
+                center: center, rx: lidRadiusX, ry: lidRadiusY,
+                cut: lids.upperCut, upper: true,
+                color: .eyelidFlesh.withAlphaMultiplier(alpha)
             )
-            mesh.addEllipse(
-                center: CGPoint(
-                    x: center.x,
-                    y: center.y - sourceRadius * 0.02
-                ),
-                rx: sourceRadius * 0.72,
-                ry: max(sourceRadius * 0.045, 0.00045),
-                color: .eyelidCrease.withAlphaMultiplier(alpha * blink),
-                segments: 24
+            mesh.addEllipticalCap(
+                center: center, rx: lidRadiusX, ry: lidRadiusY,
+                cut: lids.lowerCut, upper: false,
+                color: .eyelidFlesh.withAlphaMultiplier(alpha)
             )
+            let crease = MigiOrganicMath.smoothstep(edge0: 0.86, edge1: 1, value: blink)
+            if crease > 0 {
+                mesh.addEllipse(
+                    center: CGPoint(x: center.x, y: center.y - lidRadiusY * 0.12),
+                    rx: sourceRadius * 0.72,
+                    ry: max(sourceRadius * 0.025, 0.00025),
+                    color: .eyelidCrease.withAlphaMultiplier(alpha * crease),
+                    segments: 24
+                )
+            }
         }
     }
 
@@ -3859,6 +3933,37 @@ private struct FullColorVertex {
 
 private struct FullColorMesh {
     var vertices: [FullColorVertex] = []
+
+    mutating func addEllipticalCap(
+        center: CGPoint, rx: CGFloat, ry: CGFloat,
+        cut: CGFloat, upper: Bool, color: FullRGBA
+    ) {
+        let boundary = min(max(cut, -1), 1)
+        let angle = asin(boundary)
+        let start = upper ? angle : .pi - angle
+        let end = upper ? .pi - angle : 2 * .pi + angle
+        guard end - start > 0.0001 else { return }
+        let segments = 24
+        let base = FullColorVertex(
+            position: fullMetalPoint(CGPoint(x: center.x, y: center.y + boundary * ry)),
+            color: color.vector
+        )
+        for index in 0..<segments {
+            let first = start + (end - start) * CGFloat(index) / CGFloat(segments)
+            let second = start + (end - start) * CGFloat(index + 1) / CGFloat(segments)
+            vertices.append(contentsOf: [
+                base,
+                FullColorVertex(
+                    position: fullMetalPoint(CGPoint(x: center.x + cos(first) * rx, y: center.y + sin(first) * ry)),
+                    color: color.vector
+                ),
+                FullColorVertex(
+                    position: fullMetalPoint(CGPoint(x: center.x + cos(second) * rx, y: center.y + sin(second) * ry)),
+                    color: color.vector
+                )
+            ])
+        }
+    }
 
     mutating func addEllipse(
         center: CGPoint,

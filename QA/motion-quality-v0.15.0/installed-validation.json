@@ -1,0 +1,78 @@
+{
+  "version": "0.15.0",
+  "build": "23",
+  "installed_app": "/Users/fdk/Applications/Migi Advanced.app",
+  "executable_matches_dist": true,
+  "capture_size": [
+    230,
+    270
+  ],
+  "nonempty_captures": true,
+  "live_pixels_changed": true,
+  "capture_sha256": {
+    "installed-live.png": "0204e6bf6df9097607a7eddf59f405f8acc5b93394a6f5eb0fb4bd1bb000dbca",
+    "installed-live-followup.png": "a3558c0071e449f1208320518cb00b25f9682b01f7753f1f816ee8040faa272d"
+  },
+  "snapshot": {
+    "_note": "Prefer `elements` \u2014 `tree_markdown` will continue to work but new fields will only be added to the structured side. Issue #22865: use `max_elements` / `max_depth` to bound the AX walk on apps with very large trees.",
+    "background_input": {
+      "exact_window": {
+        "pid": 18159,
+        "status": "matched",
+        "window_id": 10793
+      },
+      "observation": {
+        "frame_freshness": "unknown",
+        "one_shot_capture": "available"
+      },
+      "routes": [
+        {
+          "route": "accessibility",
+          "status": "available"
+        },
+        {
+          "route": "window_pointer",
+          "status": "available"
+        },
+        {
+          "route": "pid_keyboard",
+          "status": "available"
+        }
+      ]
+    },
+    "element_count": 1,
+    "elements": [
+      {
+        "depth": 0,
+        "element_index": 0,
+        "element_token": "s00000002:0",
+        "frame": {
+          "h": 135.0,
+          "w": 115.0,
+          "x": 1299.0,
+          "y": 56.0
+        },
+        "role": "AXWindow"
+      }
+    ],
+    "elements_complete": false,
+    "pid": 18159,
+    "returned_element_count": 1,
+    "screenshot_file_path": "/Users/fdk/Documents/Codex/2026-07-27/hatch-pet-users-fdk-codex-skills-2/migi-advanced/QA/motion-quality-v0.15.0/installed-live-followup.png",
+    "screenshot_frame_valid": true,
+    "screenshot_height": 270,
+    "screenshot_mime_type": "image/png",
+    "screenshot_scale": 2.0,
+    "screenshot_width": 230,
+    "snapshot_id": "s00000002",
+    "total_element_count": 1,
+    "tree_markdown": "- [0] AXWindow [actions=[raise]]\n",
+    "window_bounds": {
+      "height": 135.0,
+      "width": 115.0,
+      "x": 1299.0,
+      "y": 56.0
+    },
+    "window_id": 10793
+  }
+}
