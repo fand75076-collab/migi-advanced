@@ -73,6 +73,80 @@ final class MigiMotionDynamicsTests: XCTestCase {
         XCTAssertEqual(clock.sample(identity: "work", startedAt: 0, time: 2, targetRate: .nan), 2)
     }
 
+    func testWorkCadenceIsDisabledForQAAndNonWorkAnimations() {
+        for clip in ["rapid-notes", "fine-motor", "laptop", "book"] {
+            XCTAssertEqual(
+                MigiWorkCadence.targetRate(
+                    clipName: clip, baseRate: 1.25, elapsed: 7, enabled: false
+                ),
+                1.25
+            )
+            XCTAssertEqual(
+                MigiWorkCadence.targetRate(
+                    clipName: clip, baseRate: 1.25, elapsed: 0, enabled: true
+                ),
+                1.25
+            )
+        }
+        for clip in ["turn-left", "complete-sleep", "sharpen-tip", "phone"] {
+            XCTAssertEqual(
+                MigiWorkCadence.targetRate(
+                    clipName: clip, baseRate: 1, elapsed: 7, enabled: true
+                ),
+                1
+            )
+        }
+        XCTAssertEqual(
+            MigiWorkCadence.targetRate(
+                clipName: "rapid-notes", baseRate: 1,
+                elapsed: .infinity, enabled: true
+            ),
+            1
+        )
+    }
+
+    func testWorkCadenceSoftHesitationsRemainBoundedAndPlaybackMovesForward() {
+        var clock = MigiClipPlaybackClock()
+        var previous = 0.0
+        var minRate = Double.greatestFiniteMagnitude
+        var maxRate = 0.0
+        for tick in 0...3600 {
+            let time = Double(tick) / 60
+            let rate = MigiWorkCadence.targetRate(
+                clipName: "rapid-notes", baseRate: 1,
+                elapsed: time, enabled: true
+            )
+            minRate = min(minRate, rate)
+            maxRate = max(maxRate, rate)
+            let phase = clock.sample(
+                identity: "rapid-notes", startedAt: 0,
+                time: time, targetRate: rate
+            )
+            if tick > 0 {
+                XCTAssertGreaterThan(phase, previous)
+            }
+            previous = phase
+        }
+        XCTAssertGreaterThan(minRate, 0.60)
+        XCTAssertLessThan(minRate, 0.85)
+        XCTAssertGreaterThan(maxRate, 1.04)
+        XCTAssertLessThan(maxRate, 1.15)
+    }
+
+    func testWorkCadencePauseHasNoCycleBoundaryJump() {
+        for (clip, period) in [("rapid-notes", 12.7), ("book", 16.4)] {
+            let before = MigiWorkCadence.targetRate(
+                clipName: clip, baseRate: 1,
+                elapsed: period - 0.001, enabled: true
+            )
+            let after = MigiWorkCadence.targetRate(
+                clipName: clip, baseRate: 1,
+                elapsed: period + 0.001, enabled: true
+            )
+            XCTAssertLessThan(abs(after - before), 0.005)
+        }
+    }
+
     func testBreathingRemainsContinuousWhenEnergyChanges() {
         var oscillator = MigiBreathingPhase()
         var previous: CGFloat = 0

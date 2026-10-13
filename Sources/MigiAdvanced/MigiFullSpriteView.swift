@@ -1488,11 +1488,20 @@ final class MigiFullSpriteView: MTKView, MTKViewDelegate {
             activeClipName = identity
             activeClipStartedAt = time
         }
+        // Let working gestures breathe instead of repeating with machine-
+        // perfect timing. Real Agent throughput remains the main speed signal.
+        // Deterministic QA and the live demo menu retain authored timings.
+        let targetRate = MigiWorkCadence.targetRate(
+            clipName: resolved.name,
+            baseRate: playbackRate,
+            elapsed: time - activeClipStartedAt,
+            enabled: !Self.isDeterministicQARun && !demoMode
+        )
         let clipTime = clipPlaybackClock.sample(
             identity: identity,
             startedAt: activeClipStartedAt,
             time: time,
-            targetRate: playbackRate
+            targetRate: targetRate
         )
         let frame = Self.frameIndex(
             for: resolved.clip,
