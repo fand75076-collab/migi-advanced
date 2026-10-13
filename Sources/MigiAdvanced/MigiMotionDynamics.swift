@@ -40,6 +40,61 @@ struct MigiClipPlaybackClock {
     }
 }
 
+//// MARK: - Non-repetitive work cadence
+
+/// A renderer-only, low-frequency variation layered over real Agent throughput.
+/// No random state, new clips, or atlas changes: the integrated playback clock
+/// handles these changes without re-timing frames that have already played.
+enum MigiWorkCadence {
+    static func targetRate(
+        clipName: String,
+        baseRate: Double,
+        elapsed: TimeInterval,
+        enabled: Bool
+    ) -> Double {
+        guard enabled, baseRate.isFinite, elapsed.isFinite, elapsed > 0 else {
+            return baseRate
+        }
+        let isFineWork: Bool
+        let phaseOffset: Double
+        switch clipName {
+        case "rapid-notes":
+            isFineWork = true
+            phaseOffset = 0
+        case "fine-motor":
+            isFineWork = true
+            phaseOffset = 1.4
+        case "laptop":
+            isFineWork = false
+            phaseOffset = 0.8
+        case "book":
+            isFineWork = false
+            phaseOffset = 2.0
+        default:
+            return baseRate
+        }
+
+        // Incommensurate slow beats keep a four/six-frame gesture from looping
+        // at the exact same cadence forever. These only alter future playback.
+        let slow = sin(elapsed * 0.71 + phaseOffset)
+        let counter = sin(elapsed * 1.83 + phaseOffset * 0.37)
+        let wave = (isFineWork ? 0.070 : 0.045) * slow
+            + (isFineWork ? 0.033 : 0.020) * counter
+
+        // A brief hesitation every dozen-plus seconds suggests a small
+        // refocus rather than a metronome. The Gaussian tails are effectively
+        // zero at the cycle wrap, avoiding visible clock-rate discontinuities.
+        let pausePeriod = isFineWork ? 12.7 : 16.4
+        let inCycle = elapsed.truncatingRemainder(dividingBy: pausePeriod)
+        let distance = (inCycle - pausePeriod * 0.55) / 0.55
+        let hesitation = (isFineWork ? 0.23 : 0.11)
+            * exp(-0.5 * distance * distance)
+        let entry = 1 - exp(-elapsed / 1.8)
+        let multiplier = 1 + entry * (wave - hesitation)
+        return min(max(baseRate * multiplier, 0.05), 4)
+    }
+}
+
 /// Frequency changes affect the next increment, independently of system uptime.
 struct MigiBreathingPhase {
     private(set) var phase: Double = 0
